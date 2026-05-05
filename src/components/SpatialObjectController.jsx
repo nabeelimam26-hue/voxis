@@ -299,9 +299,11 @@ export default function SpatialObjectController({ handsRef }) {
         );
 
         // ── UPDATE OBJECT ────────────────────────────────────────────────────
-        torusKnot.position.copy(currentPos.current);
-        torusKnot.rotation.setFromEuler(currentRotEuler.current);
-        torusKnot.scale.setScalar(currentScale.current);
+        if (torusKnot && typeof torusKnot.rotation?.setFromEuler === 'function') {
+          torusKnot.position.copy(currentPos.current);
+          torusKnot.rotation.setFromEuler(currentRotEuler.current);
+          torusKnot.scale.setScalar(currentScale.current);
+        }
 
         // ── DYNAMIC LIGHTING: Color by hand distance ────────────────────────
         if (handCountRef.current === 2) {
