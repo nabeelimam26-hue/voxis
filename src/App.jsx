@@ -191,6 +191,12 @@ export default function EmojiMirror() {
   const [videoPlaying, setVideoPlaying]     = useState(false);
   const [webcamActive, setWebcamActive]     = useState(false);
   const [videoError, setVideoError]         = useState(null);
+  const [systemStatus, setSystemStatus]     = useState({
+    model: "loading",
+    input: "idle",
+    detection: "idle",
+    fps: "0",
+  });
   const [currentGesture, setCurrentGesture] = useState("none");
   const [gestureDebug, setGestureDebug]     = useState(null);
   const [lastAction, setLastAction]         = useState(null);
@@ -222,6 +228,10 @@ export default function EmojiMirror() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadedVideos, setUploadedVideos] = useState([]);
 
+  const markStatus = useCallback((patch) => {
+    setSystemStatus(prev => ({ ...prev, ...patch }));
+  }, []);
+
   // ── Theme ──────────────────────────────────────────────────────────────────
   const T = theme === "dark"
     ? { bg:"#080c10", border:"rgba(0,255,204,0.2)", accent:"#00ffcc", dim:"#333",    text:"#e0e0e0", grid:"rgba(0,255,204,0.05)" }
@@ -247,21 +257,34 @@ export default function EmojiMirror() {
     if (videoRef.current)  { videoRef.current.pause(); videoRef.current.srcObject=null; }
     setVideoPlaying(false); setWebcamActive(false); setVideoError(null);
     setCurrentGesture("none"); setFps(0);
+    markStatus({ input: "stopped", detection: "stopped", fps: "0" });
     handsRef.current = null;
-  }, []);
+  }, [markStatus]);
 
   // ── Load MediaPipe model (using custom hook) ───────────────────────────────
   const loadModelWrapper = useCallback(async (mode) => {
-    const success = await loadModel(mode);
-    if (success) {
-      setModelReady(true);
+    markStatus({ model: "loading" });
+    try {
+      const success = await loadModel(mode);
+      if (success) {
+        setModelReady(true);
+        markStatus({ model: "loaded" });
+        console.log("✅ Model loaded for mode:", mode);
+      } else {
+        markStatus({ model: "failed" });
+        setVideoError("Model failed to initialize.");
+      }
+    } catch (error) {
+      markStatus({ model: "failed" });
+      setVideoError(`Model init error: ${error.message}`);
     }
-  }, [loadModel]);
+  }, [loadModel, markStatus]);
 
   const switchMode = useCallback((mode) => {
     stopAll(); setInputMode(mode); setDrawMode(false); drawPathRef.current=[];
+    markStatus({ input: `${mode}:idle`, detection: "idle", fps: "0" });
     renderGrid(); loadModelWrapper(mode);
-  }, [stopAll, loadModelWrapper]);
+  }, [stopAll, loadModelWrapper, renderGrid, markStatus]);
 
   // ── Canvas grid ────────────────────────────────────────────────────────────
   const renderGrid = useCallback(() => {
@@ -377,10 +400,12 @@ export default function EmojiMirror() {
   const updateFps = useCallback(() => {
     const now = Date.now(); fpsRef.current.frames++;
     if (now - fpsRef.current.last >= 1000) {
-      setFps(fpsRef.current.frames);
-      fpsRef.current = { frames:0, last:now, fps:fpsRef.current.frames };
+      const nextFps = fpsRef.current.frames;
+      setFps(nextFps);
+      markStatus({ fps: String(nextFps) });
+      fpsRef.current = { frames:0, last:now, fps:nextFps };
     }
-  }, []);
+  }, [markStatus]);
 
   // ── MODE 1: Static image (using custom hook) ───────────────────────────────
   const detectFromImage = useCallback(() => {
@@ -434,6 +459,8 @@ export default function EmojiMirror() {
       
       // Detect gesture and trigger action
       if (handsData) {
+        console.log("🖐 Hands Data:", handsData);
+        markStatus({ detection: "running" });
         // Handle multi-hand format from hook
         const landmarks = handsData.hands ? handsData.hands[0]?.landmarks : handsData;
         handsRef.current = handsData;  // ← Feed full data to spatial controller
@@ -444,6 +471,8 @@ export default function EmojiMirror() {
           triggerAction(gesture,landmarks, handsData);
         }
       } else {
+        console.warn("⚠ No hands detected");
+        markStatus({ detection: "running:no_hands" });
         handsRef.current = null;
         triggerAction("none",null);
       }
@@ -453,18 +482,23 @@ export default function EmojiMirror() {
     
     // Start the detection loop using the hook
     loopRef.current = hookStartDetectionLoop(videoEl, canvasRef, onLandmarks, mirror);
-  }, [T.grid, hookStartDetectionLoop, triggerAction, updateDrawing, updateFps]);
+  }, [T.grid, hookStartDetectionLoop, triggerAction, updateDrawing, updateFps, markStatus]);
 
   // ── MODE 2: Video file ─────────────────────────────────────────────────────
   const startVideo = useCallback(() => {
-    if (!handLandmarkerRef.current||!modelReady) return;
+    if (!handLandmarkerRef.current||!modelReady) {
+      setVideoError("Tracker/model not ready for video mode.");
+      return;
+    }
+    console.log("🎬 Starting video pipeline");
+    markStatus({ input: "video:loading", detection: "booting" });
     setVideoError(null);
     const video = videoRef.current;
     video.src="/videos/hand.mp4"; video.loop=true; video.muted=true; video.playsInline=true;
-    video.onloadeddata=()=>{ video.play().then(()=>{setVideoPlaying(true);startDetectionLoop(video,false);}).catch(e=>setVideoError(`${e.message}`)); };
-    video.onerror=()=>setVideoError("Could not load /videos/hand.mp4");
+    video.onloadeddata=()=>{ video.play().then(()=>{setVideoPlaying(true); markStatus({ input: "video:playing" }); startDetectionLoop(video,false);}).catch(e=>{ setVideoError(`${e.message}`); markStatus({ input: "video:failed" }); }); };
+    video.onerror=()=>{ setVideoError("Could not load /videos/hand.mp4"); markStatus({ input: "video:failed", detection: "idle" }); };
     video.load();
-  }, [modelReady,startDetectionLoop]);
+  }, [modelReady,startDetectionLoop, handLandmarkerRef, markStatus]);
 
   const stopVideo = useCallback(() => {
     if (loopRef.current){cancelAnimationFrame(loopRef.current);loopRef.current=null;}
@@ -475,19 +509,48 @@ export default function EmojiMirror() {
 
   // ── MODE 3: Webcam ─────────────────────────────────────────────────────────
   const startWebcam = useCallback(async () => {
-    if (!handLandmarkerRef.current||!modelReady) return;
+    if (!handLandmarkerRef.current) {
+      setVideoError("Hand tracker not initialized.");
+      return;
+    }
+    if (!modelReady) {
+      setVideoError("Model not ready yet.");
+      return;
+    }
+    console.log("📷 Requesting webcam...");
+    markStatus({ input: "webcam:requesting", detection: "booting" });
     setVideoError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}});
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("getUserMedia unsupported in this browser");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video:{ width:{ ideal:1280 }, height:{ ideal:720 }, facingMode:"user" },
+      });
       streamRef.current=stream;
       const video=videoRef.current; video.srcObject=stream; video.muted=true; video.playsInline=true;
-      await video.play(); setWebcamActive(true); startDetectionLoop(video,true);
+      await video.play();
+      console.log("✅ Webcam video playing");
+      setWebcamActive(true);
+      markStatus({ input: "webcam:running" });
+      startDetectionLoop(video,true);
     } catch(err) {
-      if (err.name==="NotFoundError") setVideoError("No camera found.");
+      if (err.name==="NotFoundError" || err.name==="DevicesNotFoundError") {
+        setVideoError("No camera found. Falling back to sample video.");
+        markStatus({ input: "webcam:missing", detection: "fallback:video" });
+        startVideo();
+      }
       else if (err.name==="NotAllowedError") setVideoError("Camera access denied.");
       else setVideoError(`Camera error: ${err.message}`);
     }
-  }, [modelReady,startDetectionLoop]);
+  }, [modelReady,startDetectionLoop, startVideo, markStatus, handLandmarkerRef]);
+
+  // ── Auto-start webcam once model is ready in webcam mode ───────────────────
+  useEffect(() => {
+    if (!modelReady || inputMode !== "webcam" || webcamActive) return;
+    console.log("🚀 Auto starting webcam...");
+    startWebcam();
+  }, [modelReady, inputMode, webcamActive, startWebcam]);
 
   const stopWebcam = useCallback(() => {
     if (loopRef.current){cancelAnimationFrame(loopRef.current);loopRef.current=null;}
@@ -548,12 +611,22 @@ export default function EmojiMirror() {
           {show3D && (
             <div style={{ position:"relative",width:"100%",height:"400px" }}>
               <SpatialObjectController handsRef={handsRef} />
+              <div style={{position:"absolute",top:10,left:10,color:handsRef.current?"#00ff66":"#ff4444",fontSize:12,zIndex:20}}>
+                {handsRef.current ? "🟢 HAND DETECTED" : "🔴 NO HAND"}
+              </div>
             </div>
           )}
           <canvas ref={canvasRef} width={600} height={380} style={{ display:show3D?"none":"block",width:"100%",height:"auto" }} />
           <div style={{ padding:10,borderTop:`1px solid ${T.border}`,fontSize:9,color:T.dim }}>
             {inputMode==="webcam"?"LIVE":"STATIC"} • {fps} FPS • {fmtTime(sessionTime)}
           </div>
+          <div style={{ padding:"8px 10px",borderTop:`1px solid ${T.border}`,fontSize:10,color:T.text,display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8 }}>
+            <div>MODEL: <span style={{ color:T.accent }}>{systemStatus.model}</span></div>
+            <div>INPUT: <span style={{ color:T.accent }}>{systemStatus.input}</span></div>
+            <div>DETECTION: <span style={{ color:T.accent }}>{systemStatus.detection}</span></div>
+            <div>FPS: <span style={{ color:T.accent }}>{systemStatus.fps}</span></div>
+          </div>
+          {videoError && <div style={{ padding:"8px 10px",borderTop:`1px solid ${T.border}`,fontSize:10,color:"#ff6666" }}>ERROR: {videoError}</div>}
         </div>
 
         {/* Controls */}
