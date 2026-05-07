@@ -135,6 +135,7 @@ export default function EmojiMirror() {
   const handsRef     = useRef(null);
 
   // Core state
+  const [renderMode, setRenderMode] = useState("luxury");
   const [theme,       setTheme]       = useState("dark");
   const [tab,         setTab]         = useState("mirror");
   const [inputMode,   setInputMode]   = useState("image");
@@ -301,6 +302,47 @@ export default function EmojiMirror() {
     img.onerror=()=>setScanning(false);
   },[modelReady,handLandmarkerRef,hookDetect,triggerAction,drawGrid,imgFile]);
 
+
+  <div
+  style={{
+    display: "flex",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 10,
+  }}
+>
+  <button
+    onClick={() => setRenderMode("safe")}
+    style={{
+      background:
+        renderMode === "safe" ? "#00ffcc" : "#111",
+      color:
+        renderMode === "safe" ? "#000" : "#00ffcc",
+      border: "1px solid #00ffcc",
+      padding: "6px 12px",
+      cursor: "pointer",
+    }}
+  >
+    ⚡ SAFE
+  </button>
+
+  <button
+    onClick={() => setRenderMode("luxury")}
+    style={{
+      background:
+        renderMode === "luxury" ? "#00ffcc" : "#111",
+      color:
+        renderMode === "luxury" ? "#000" : "#00ffcc",
+      border: "1px solid #00ffcc",
+      padding: "6px 12px",
+      cursor: "pointer",
+    }}
+  >
+    💎 LUXURY
+  </button>
+</div>
+
+
   // ── Video/webcam loop ─────────────────────────────────────────────────────
   const startLoop = useCallback((videoEl,mirror=false)=>{
     const onFrame=(handsData,canvas)=>{
@@ -433,7 +475,7 @@ export default function EmojiMirror() {
                 {show3D&&(
                   <div style={{position:"relative",width:"100%",paddingTop:"63.3%"}}>
                     <div style={{position:"absolute",inset:0}}>
-                      <SpatialObjectController handsRef={handsRef} uploadedModelFile={modelFile}/>
+                      <SpatialObjectController handsRef={handsRef} renderMode={renderMode} uploadedModelFile={modelFile}/>
                     </div>
                   </div>
                 )}

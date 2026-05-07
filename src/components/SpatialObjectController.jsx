@@ -18,6 +18,32 @@ const LS     = 0.10;   // lerp scale
 const CAM_Z  = 12;
 const D_MIN  = 0.15;
 const D_MAX  = 1.20;
+const CONFIG = RENDER_PRESETS[renderMode];
+const isMobile =
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+const RENDER_PRESETS = {
+  safe: {
+    shadows: false,
+    fog: false,
+    pixelRatio: 1,
+    torusSegments: 48,
+    tubularSegments: 8,
+    uiThrottle: 500,
+    pointLights: 1,
+  },
+
+  luxury: {
+    shadows: true,
+    fog: true,
+    pixelRatio: Math.min(window.devicePixelRatio, 2),
+    torusSegments: 128,
+    tubularSegments: 16,
+    uiThrottle: 250,
+    pointLights: 3,
+  },
+};
+
 
 function lmW(lm){ return { x:(lm.x-.5)*WORLD, y:-(lm.y-.5)*WORLD, z:lm.z*-DEPTH }; }
 function d3(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2); }
@@ -32,7 +58,12 @@ function fitAndCenter(model){
   model.traverse(c=>{ if(c.isMesh){c.castShadow=true;c.receiveShadow=true;} });
 }
 
-export default function SpatialObjectController({ handsRef, uploadedModelFile }) {
+export default function SpatialObjectController({
+  handsRef,
+  uploadedModelFile,
+  renderMode = "luxury",
+}) {
+  const CONFIG = RENDER_PRESETS[renderMode];
   const mountRef   = useRef(null);
   const stateRef   = useRef(null);
   const rafRef     = useRef(null);
@@ -59,12 +90,14 @@ export default function SpatialObjectController({ handsRef, uploadedModelFile })
     try{
       const W=mount.clientWidth||640, H=mount.clientHeight||400;
       const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
-      renderer.setSize(W,H); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-      renderer.setClearColor(0x050810,1); renderer.shadowMap.enabled=true;
+      renderer.setSize(W,H); renderer.setPixelRatio(CONFIG.pixelRatio);
+      renderer.setClearColor(0x050810,1); renderer.shadowMap.enabled =CONFIG.shadows;
       mount.appendChild(renderer.domElement);
 
       const scene=new THREE.Scene();
-      scene.fog=new THREE.Fog(0x050810,50,120);
+      if (CONFIG.fog) {
+        scene.fog = new THREE.Fog(0x050810, 50, 120);
+      }
       const camera=new THREE.PerspectiveCamera(60,W/H,.1,200);
       camera.position.set(0,0,CAM_Z);
 
@@ -72,7 +105,13 @@ export default function SpatialObjectController({ handsRef, uploadedModelFile })
       scene.add(new THREE.AmbientLight(0x1a1a2e,1.2));
       const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(8,10,8); dir.castShadow=true; scene.add(dir);
       const pL1=new THREE.PointLight(0xff0066,2.5,40); pL1.position.set(-8,4,6); scene.add(pL1);
-      const pL2=new THREE.PointLight(0x00ffcc,2.5,40); pL2.position.set(8,-4,6); scene.add(pL2);
+      let pL2 = null;
+
+if (CONFIG.pointLights >= 2) {
+  pL2 = new THREE.PointLight(0x00ffcc,2.5,40);
+  pL2.position.set(8,-4,6);
+  scene.add(pL2);
+}(0x00ffcc,2.5,40); pL2.position.set(8,-4,6); scene.add(pL2);
       scene.add(new THREE.PointLight(0x8844ff,1.5,30));
 
       // Grid
@@ -80,7 +119,12 @@ export default function SpatialObjectController({ handsRef, uploadedModelFile })
       grid.position.y=-6; grid.material.transparent=true; grid.material.opacity=.3; scene.add(grid);
 
       // Default hero: TorusKnot chrome
-      const geo=new THREE.TorusKnotGeometry(1.2,.4,128,16);
+      const geo=new THREE.TorusKnotGeometry(
+      1.2,
+      0.4,
+      CONFIG.torusSegments,
+      CONFIG.tubularSegments
+        );
       const mat=new THREE.MeshStandardMaterial({color:0xcccccc,metalness:.95,roughness:.05});
       const hero=new THREE.Mesh(geo,mat); hero.castShadow=true; hero.receiveShadow=true; scene.add(hero);
 
@@ -143,10 +187,14 @@ export default function SpatialObjectController({ handsRef, uploadedModelFile })
           pL1.intensity=2+Math.sin(now*.003)*.5;
         }
         const tOrb=now*.0005;
-        pL2.position.x=Math.sin(tOrb)*10; pL2.position.z=Math.cos(tOrb)*8;
+        if (pL2) {
+  pL2.position.x = Math.sin(tOrb) * 10;
+  pL2.position.z = Math.cos(tOrb) * 8;
+}
 
         // Throttled UI update (250ms)
-        if(now-uiTimer.current>250){
+        
+        if (now - uiTimer.current > CONFIG.uiThrottle){
           uiTimer.current=now;
           const c=hcRef.current;
           setHandCount(c);
