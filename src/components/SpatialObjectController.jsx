@@ -9,19 +9,6 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
-
-const WORLD  = 6;
-const DEPTH  = 3;
-const LR     = 0.05;   // lerp rotation
-const LP     = 0.10;   // lerp position
-const LS     = 0.10;   // lerp scale
-const CAM_Z  = 12;
-const D_MIN  = 0.15;
-const D_MAX  = 1.20;
-const CONFIG = RENDER_PRESETS[renderMode];
-const isMobile =
-  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
 const RENDER_PRESETS = {
   safe: {
     shadows: false,
@@ -43,6 +30,18 @@ const RENDER_PRESETS = {
     pointLights: 3,
   },
 };
+const WORLD  = 6;
+const DEPTH  = 3;
+const LR     = 0.05;   // lerp rotation
+const LP     = 0.10;   // lerp position
+const LS     = 0.10;   // lerp scale
+const CAM_Z  = 12;
+const D_MIN  = 0.15;
+const D_MAX  = 1.20;
+const isMobile =
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+
 
 
 function lmW(lm){ return { x:(lm.x-.5)*WORLD, y:-(lm.y-.5)*WORLD, z:lm.z*-DEPTH }; }
@@ -111,7 +110,7 @@ if (CONFIG.pointLights >= 2) {
   pL2 = new THREE.PointLight(0x00ffcc,2.5,40);
   pL2.position.set(8,-4,6);
   scene.add(pL2);
-}(0x00ffcc,2.5,40); pL2.position.set(8,-4,6); scene.add(pL2);
+}
       scene.add(new THREE.PointLight(0x8844ff,1.5,30));
 
       // Grid
@@ -186,8 +185,9 @@ if (CONFIG.pointLights >= 2) {
           pL1.color.lerpColors(new THREE.Color(0xff3366),new THREE.Color(0x00ffcc),t);
           pL1.intensity=2+Math.sin(now*.003)*.5;
         }
-        const tOrb=now*.0005;
-        if (pL2) {
+const tOrb = now * 0.0005;
+
+if (pL2) {
   pL2.position.x = Math.sin(tOrb) * 10;
   pL2.position.z = Math.cos(tOrb) * 8;
 }

@@ -373,6 +373,15 @@ export default function EmojiMirror() {
     f=requestAnimationFrame(tick);return()=>cancelAnimationFrame(f);
   },[particles.length>0&&particles[0]?.id]);
 
+  useEffect(() => {
+  return () => {
+    if (vidSrc) {
+      URL.revokeObjectURL(vidSrc);
+    }
+  };
+}, [vidSrc]);
+
+
   useEffect(()=>{
     if(!rain.length)return;
     let local=[...rain],f;

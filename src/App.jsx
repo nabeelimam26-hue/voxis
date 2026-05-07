@@ -293,7 +293,8 @@ export default function EmojiMirror() {
         cv.width=img.width; cv.height=img.height; ctx.drawImage(img,0,0);
         const res=hookDetect(img);
         const lm=res?.hands?res.hands[0]?.landmarks:res;
-        if(lm){drawHand(ctx,lm,cv.width,cv.height);triggerAction(classifyGesture(lm),lm);}
+        if(lm){drawHand(ctx,lm,cv.width,cv.height);const detectedGesture = classifyGesture(lm || []);
+triggerAction(detectedGesture, lm);}
         else  {handsRef.current=null;triggerAction("none",null);drawGrid();}
       }catch(e){console.error(e);}
       setScanning(false);
@@ -361,7 +362,8 @@ export default function EmojiMirror() {
       if(handsData){
         const lm=handsData.hands?handsData.hands[0]?.landmarks:handsData;
         handsRef.current=handsData;
-        if(lm){drawHand(ctx,lm,canvas.width,canvas.height);updateDraw(lm,canvas.width,canvas.height);triggerAction(classifyGesture(lm),lm);}
+        if(lm){drawHand(ctx,lm,canvas.width,canvas.height);updateDraw(lm,canvas.width,canvas.height);const detectedGesture = classifyGesture(lm || []);
+triggerAction(detectedGesture, lm);}
       }else{handsRef.current=null;triggerAction("none",null);}
       tickFps();
     };
@@ -390,7 +392,11 @@ export default function EmojiMirror() {
     if(!handLandmarkerRef.current||!modelReady)return;
     setVidErr(null);
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}});
+      const stream=await navigator.mediaDevices.getUserMedia({video: {
+  width: renderMode === "safe" ? 320 : 640,
+  height: renderMode === "safe" ? 240 : 480,
+  facingMode: "user",
+}});
       streamRef.current=stream;
       const v=videoRef.current;
       v.srcObject=stream;v.muted=true;v.playsInline=true;await v.play();
@@ -496,7 +502,69 @@ export default function EmojiMirror() {
                   ◈ 3D {show3D?"ON":"OFF"}
                 </button>
               </div>
+<div
+  style={{
+    display: "flex",
+    gap: 6,
+    marginBottom: 8,
+  }}
+>
+  <button
+    onClick={() => setRenderMode("safe")}
+    style={{
+      flex: 1,
+      padding: "9px",
+      background:
+        renderMode === "safe"
+          ? "rgba(0,255,204,0.18)"
+          : "transparent",
+      border: `1px solid ${
+        renderMode === "safe"
+          ? "#00ffcc"
+          : T.border
+      }`,
+      color:
+        renderMode === "safe"
+          ? "#00ffcc"
+          : T.dim,
+      cursor: "pointer",
+      borderRadius: 3,
+      fontSize: 9,
+      letterSpacing: 1,
+      fontFamily: "'Courier New',monospace",
+    }}
+  >
+    ⚡ SAFE
+  </button>
 
+  <button
+    onClick={() => setRenderMode("luxury")}
+    style={{
+      flex: 1,
+      padding: "9px",
+      background:
+        renderMode === "luxury"
+          ? "rgba(136,0,255,0.18)"
+          : "transparent",
+      border: `1px solid ${
+        renderMode === "luxury"
+          ? "#aa66ff"
+          : T.border
+      }`,
+      color:
+        renderMode === "luxury"
+          ? "#bb66ff"
+          : T.dim,
+      cursor: "pointer",
+      borderRadius: 3,
+      fontSize: 9,
+      letterSpacing: 1,
+      fontFamily: "'Courier New',monospace",
+    }}
+  >
+    💎 LUXURY
+  </button>
+</div>
               {/* Action buttons */}
               {inputMode==="image"&&(
                 <button onClick={detectImg} disabled={!modelReady||scanning} style={{width:"100%",padding:"10px",marginBottom:8,background:modelReady?"#00ffcc1a":"#111",border:`1px solid ${modelReady?"#00ffcc44":"#222"}`,color:modelReady?"#00ffcc":"#333",cursor:modelReady?"pointer":"not-allowed",borderRadius:3,fontSize:10,letterSpacing:2,fontFamily:"'Courier New',monospace"}}>

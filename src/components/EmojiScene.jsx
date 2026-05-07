@@ -93,20 +93,55 @@ export default function EmojiScene({ landmarksRef, gesture, modelPath = "/models
     camera.position.set(0, 0, CAMERA_Z);
 
     // ── Lights ─────────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0x222233, 1.5));
+   
+scene.add(new THREE.AmbientLight(0x1a1a2e, 1.2));
 
-    const dirLight = new THREE.DirectionalLight(0x00ffcc, 3);
-    dirLight.position.set(5, 10, 8);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
+const dir = new THREE.DirectionalLight(
+  0xffffff,
+  1.5
+);
 
-    const pLight1 = new THREE.PointLight(0xff00aa, 4, 30);
-    pLight1.position.set(-6, 4, 4);
-    scene.add(pLight1);
+dir.position.set(8, 10, 8);
 
-    const pLight2 = new THREE.PointLight(0x8800ff, 3, 25);
-    pLight2.position.set(6, -4, 4);
-    scene.add(pLight2);
+if (CONFIG.shadows) {
+  dir.castShadow = true;
+}
+
+scene.add(dir);
+
+const pL1 = new THREE.PointLight(
+  0xff0066,
+  2.5,
+  40
+);
+
+pL1.position.set(-8, 4, 6);
+
+scene.add(pL1);
+
+let pL2 = null;
+
+if (CONFIG.pointLights >= 2) {
+  pL2 = new THREE.PointLight(
+    0x00ffcc,
+    2.5,
+    40
+  );
+
+  pL2.position.set(8, -4, 6);
+
+  scene.add(pL2);
+}
+
+if (CONFIG.pointLights >= 3) {
+  const pL3 = new THREE.PointLight(
+    0x8844ff,
+    1.5,
+    30
+  );
+
+  scene.add(pL3);
+}
 
     // ── Star field ─────────────────────────────────────────────────────────────
     const starGeo = new THREE.BufferGeometry();
