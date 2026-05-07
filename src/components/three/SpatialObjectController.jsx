@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 /**
  * SpatialObjectController.jsx
  * FIX: rotation.setFromEuler removed — direct euler property assignment used instead
@@ -9,54 +10,9 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
-const RENDER_PRESETS = {
-  safe: {
-    shadows: false,
-    fog: false,
-    pixelRatio: 1,
-    torusSegments: 48,
-    tubularSegments: 8,
-    uiThrottle: 500,
-    pointLights: 1,
-  },
-
-  luxury: {
-    shadows: true,
-    fog: true,
-    pixelRatio: Math.min(window.devicePixelRatio, 2),
-    torusSegments: 128,
-    tubularSegments: 16,
-    uiThrottle: 250,
-    pointLights: 3,
-  },
-};
-const WORLD  = 6;
-const DEPTH  = 3;
-const LR     = 0.05;   // lerp rotation
-const LP     = 0.10;   // lerp position
-const LS     = 0.10;   // lerp scale
-const CAM_Z  = 12;
-const D_MIN  = 0.15;
-const D_MAX  = 1.20;
-const isMobile =
-  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-
-
-
-function lmW(lm){ return { x:(lm.x-.5)*WORLD, y:-(lm.y-.5)*WORLD, z:lm.z*-DEPTH }; }
-function d3(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2); }
-function lerp3(v,t,a){ v.x=THREE.MathUtils.lerp(v.x,t.x,a);v.y=THREE.MathUtils.lerp(v.y,t.y,a);v.z=THREE.MathUtils.lerp(v.z,t.z,a); }
-
-function fitAndCenter(model){
-  const box=new THREE.Box3().setFromObject(model);
-  const ctr=box.getCenter(new THREE.Vector3());
-  const sz=box.getSize(new THREE.Vector3()).length();
-  model.position.sub(ctr);
-  model.scale.setScalar(3.5/sz);
-  model.traverse(c=>{ if(c.isMesh){c.castShadow=true;c.receiveShadow=true;} });
-}
-
+import { RENDER_PRESETS } from "./RenderPresets";
+import { createLightingSystem, animateLighting } from "./LightingSystem";
+import { CAM_Z, D_MAX, D_MIN, LP, LR, LS, applyTwoHandTargets, fitAndCenter, lerp3, lmW } from "./HandPhysics";
 export default function SpatialObjectController({
   handsRef,
   uploadedModelFile,
@@ -81,6 +37,7 @@ export default function SpatialObjectController({
   const [status,    setStatus]    = useState("initializing…");
   const [handCount, setHandCount] = useState(0);
   const [modelInfo, setModelInfo] = useState("default TorusKnot");
+  const [scaleLabel,setScaleLabel]= useState("1.00");
   const [err,       setErr]       = useState(null);
 
   // ── Scene setup (once) ─────────────────────────────────────────────────────
@@ -100,18 +57,8 @@ export default function SpatialObjectController({
       const camera=new THREE.PerspectiveCamera(60,W/H,.1,200);
       camera.position.set(0,0,CAM_Z);
 
-      // Lights
-      scene.add(new THREE.AmbientLight(0x1a1a2e,1.2));
-      const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(8,10,8); dir.castShadow=true; scene.add(dir);
-      const pL1=new THREE.PointLight(0xff0066,2.5,40); pL1.position.set(-8,4,6); scene.add(pL1);
-      let pL2 = null;
-
-if (CONFIG.pointLights >= 2) {
-  pL2 = new THREE.PointLight(0x00ffcc,2.5,40);
-  pL2.position.set(8,-4,6);
-  scene.add(pL2);
-}
-      scene.add(new THREE.PointLight(0x8844ff,1.5,30));
+      // Lights are isolated to keep render-mode tuning debug-safe.
+      const { pL1, pL2 } = createLightingSystem(scene, CONFIG);
 
       // Grid
       const grid=new THREE.GridHelper(30,30,0x444466,0x222233);
@@ -148,16 +95,7 @@ if (CONFIG.pointLights >= 2) {
           const R=hd.hands.find(h=>h.handedness==="Right");
           if(L&&R){
             hcRef.current=2;
-            const lp=lmW(L.landmarks[0]), rp=lmW(R.landmarks[0]);
-            tPos.current.set((lp.x+rp.x)*.5,(lp.y+rp.y)*.5,(lp.z+rp.z)*.5);
-            const dist=d3(lp,rp); hdRef.current=dist;
-            tScale.current=THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(dist,D_MIN,D_MAX,.3,2.5),.2,3);
-            const v=new THREE.Vector3(rp.x-lp.x,rp.y-lp.y,rp.z-lp.z).normalize();
-            tRY.current=v.x*Math.PI*.6;
-            tRZ.current=v.y*Math.PI*.4;
-            const ml=lmW(L.landmarks[9]),mr=lmW(R.landmarks[9]);
-            markers[0].position.set(ml.x,ml.y,ml.z); markers[0].visible=true;
-            markers[1].position.set(mr.x,mr.y,mr.z); markers[1].visible=true;
+            applyTwoHandTargets({ leftHand: L, rightHand: R, tPos, tScale, tRY, tRZ, hdRef, markers });
           }
         }else if(hd?.hands?.length===1){
           hcRef.current=1;
@@ -180,17 +118,7 @@ if (CONFIG.pointLights >= 2) {
         hero.scale.setScalar(cScale.current);
 
         // Dynamic lighting
-        if(hcRef.current===2){
-          const t=THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(hdRef.current,D_MIN,D_MAX,0,1),0,1);
-          pL1.color.lerpColors(new THREE.Color(0xff3366),new THREE.Color(0x00ffcc),t);
-          pL1.intensity=2+Math.sin(now*.003)*.5;
-        }
-const tOrb = now * 0.0005;
-
-if (pL2) {
-  pL2.position.x = Math.sin(tOrb) * 10;
-  pL2.position.z = Math.cos(tOrb) * 8;
-}
+        animateLighting({ pL1, pL2, handCount: hcRef.current, handDistance: hdRef.current, now, minDistance: D_MIN, maxDistance: D_MAX });
 
         // Throttled UI update (250ms)
         
@@ -198,6 +126,7 @@ if (pL2) {
           uiTimer.current=now;
           const c=hcRef.current;
           setHandCount(c);
+          setScaleLabel(cScale.current.toFixed(2));
           setStatus(c===2?"✓ 2 hands — full control":c===1?"⚡ 1 hand":"waiting for hands…");
         }
 
@@ -248,7 +177,7 @@ if (pL2) {
       {/* Status */}
       <div style={{position:"absolute",bottom:8,left:10,pointerEvents:"none",fontFamily:"monospace",fontSize:10,color:"#00ffcc",textShadow:"0 0 8px #00ffcc",zIndex:10}}>
         {status}
-        <div style={{fontSize:8,opacity:.45,marginTop:2}}>hands:{handCount} · scale:{cScale.current.toFixed(2)}x · {modelInfo}</div>
+        <div style={{fontSize:8,opacity:.45,marginTop:2}}>hands:{handCount} · scale:{scaleLabel}x · {modelInfo}</div>
       </div>
       {/* Legend */}
       <div style={{position:"absolute",top:8,right:8,pointerEvents:"none",fontFamily:"monospace",fontSize:8,color:"#556",background:"rgba(0,0,0,0.45)",padding:"7px 11px",borderRadius:3,border:"1px solid rgba(0,255,204,0.08)",zIndex:10,lineHeight:1.7}}>
