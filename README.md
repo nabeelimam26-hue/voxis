@@ -1,4 +1,4 @@
-## Emoji Mirror ##
+## voxis ##
 
 > **An interactive AI experience bridging the gap between Java logic and 3D web environments.**
 
