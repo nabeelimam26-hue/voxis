@@ -1,448 +1,216 @@
 /**
- * SpatialObjectController.jsx — Professional 3D Spatial Physics Engine
- *
- * Features:
- * - TorusKnot geometry with chrome finish (MeshStandardMaterial)
- * - Dual-hand control for physics-based manipulation
- * - Two-hand scaling: Distance between hands controls object scale
- * - Two-hand rotation: Vector between hands maps to Y & Z rotation (steering wheel effect)
- * - Water-smooth LERP: rotation(0.05), position(0.1), scale(0.1)
- * - Dynamic lighting: PointLight color changes based on hand distance
- * - Optimized for Samsung Galaxy F12 (60fps target)
+ * SpatialObjectController.jsx
+ * FIX: rotation.setFromEuler removed — direct euler property assignment used instead
+ * FIX: no setState inside animation loop — uses refs + 250ms throttle
+ * ADD: uploadedModelFile prop → loads GLB or OBJ via blob URL
  */
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-const WORLD_SCALE = 6;
-const DEPTH_SCALE = 3;
-const LERP_ROTATION = 0.05; // ← Smooth rotation steering wheel effect
-const LERP_POSITION = 0.1; // ← Smooth position following
-const LERP_SCALE = 0.1; // ← Smooth scale interpolation
-const CAMERA_Z = 12;
+const WORLD  = 6;
+const DEPTH  = 3;
+const LR     = 0.05;   // lerp rotation
+const LP     = 0.10;   // lerp position
+const LS     = 0.10;   // lerp scale
+const CAM_Z  = 12;
+const D_MIN  = 0.15;
+const D_MAX  = 1.20;
 
-// Hand distance thresholds for lighting
-const HAND_DISTANCE_MIN = 0.15; // Close (red light)
-const HAND_DISTANCE_MAX = 1.2; // Far (cyan light)
+function lmW(lm){ return { x:(lm.x-.5)*WORLD, y:-(lm.y-.5)*WORLD, z:lm.z*-DEPTH }; }
+function d3(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2); }
+function lerp3(v,t,a){ v.x=THREE.MathUtils.lerp(v.x,t.x,a);v.y=THREE.MathUtils.lerp(v.y,t.y,a);v.z=THREE.MathUtils.lerp(v.z,t.z,a); }
 
-// ─── COORDINATE MAPPING ───────────────────────────────────────────────────────
-// MediaPipe: 0→1 (top-left to bottom-right, Y down)
-// THREE: -N→+N centered at 0, Y up
-function lmToWorld(lm) {
-  return {
-    x: (lm.x - 0.5) * WORLD_SCALE,
-    y: -(lm.y - 0.5) * WORLD_SCALE,
-    z: lm.z * -DEPTH_SCALE,
-  };
+function fitAndCenter(model){
+  const box=new THREE.Box3().setFromObject(model);
+  const ctr=box.getCenter(new THREE.Vector3());
+  const sz=box.getSize(new THREE.Vector3()).length();
+  model.position.sub(ctr);
+  model.scale.setScalar(3.5/sz);
+  model.traverse(c=>{ if(c.isMesh){c.castShadow=true;c.receiveShadow=true;} });
 }
 
-// Calculate 3D distance using x, y, z coordinates
-function distance3D(a, b) {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  const dz = a.z - b.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
+export default function SpatialObjectController({ handsRef, uploadedModelFile }) {
+  const mountRef   = useRef(null);
+  const stateRef   = useRef(null);
+  const rafRef     = useRef(null);
 
-// ─── SMOOTH LERP FOR VECTORS ──────────────────────────────────────────────────
-function lerpVec3(vec, target, alpha) {
-  vec.x = THREE.MathUtils.lerp(vec.x, target.x, alpha);
-  vec.y = THREE.MathUtils.lerp(vec.y, target.y, alpha);
-  vec.z = THREE.MathUtils.lerp(vec.z, target.z, alpha);
-}
+  // Smooth targets — all refs, no setState in rAF loop
+  const tPos    = useRef(new THREE.Vector3());
+  const cPos    = useRef(new THREE.Vector3());
+  const tRY     = useRef(0);
+  const tRZ     = useRef(0);
+  const tScale  = useRef(1);
+  const cScale  = useRef(1);
+  const hcRef   = useRef(0);
+  const hdRef   = useRef(1);
+  const uiTimer = useRef(0);
 
-// ─── LERP FOR EULERS (ANGLES) ─────────────────────────────────────────────────
-function lerpEuler(euler, target, alpha) {
-  euler.x = THREE.MathUtils.lerp(euler.x, target.x, alpha);
-  euler.y = THREE.MathUtils.lerp(euler.y, target.y, alpha);
-  euler.z = THREE.MathUtils.lerp(euler.z, target.z, alpha);
-}
-
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-export default function SpatialObjectController({ handsRef }) {
-  const mountRef = useRef(null);
-  const stateRef = useRef(null);
-  const rafRef = useRef(null);
-
-  // Smooth animation targets
-  const targetPos = useRef(new THREE.Vector3(0, 0, 0));
-  const currentPos = useRef(new THREE.Vector3(0, 0, 0));
-  const targetRotEuler = useRef(new THREE.Euler(0, 0, 0));
-  const currentRotEuler = useRef(new THREE.Euler(0, 0, 0));
-  const targetScale = useRef(1);
-  const currentScale = useRef(1);
-
-  // Hand tracking state — all refs, no setState in animation loop
-  const handDistanceRef = useRef(1);
-  const handCountRef    = useRef(0);  // ← ref not state, avoids re-renders
-
-  const [status,    setStatus]    = useState("waiting for hands…");
+  const [status,    setStatus]    = useState("initializing…");
   const [handCount, setHandCount] = useState(0);
-  const [initError, setInitError] = useState(null);
+  const [modelInfo, setModelInfo] = useState("default TorusKnot");
+  const [err,       setErr]       = useState(null);
 
-  // Throttle UI updates to max 4x/sec so React doesn't re-render every frame
-  const lastUIUpdate = useRef(0);
-
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
-
-    try {
-      const W = mount.clientWidth || 640;
-      const H = mount.clientHeight || 400;
-
-      // ── Renderer ───────────────────────────────────────────────────────────────
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-      });
-      renderer.setSize(W, H);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setClearColor(0x0a0a0f, 1);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFShadowMap;
+  // ── Scene setup (once) ─────────────────────────────────────────────────────
+  useEffect(()=>{
+    const mount=mountRef.current; if(!mount)return;
+    try{
+      const W=mount.clientWidth||640, H=mount.clientHeight||400;
+      const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+      renderer.setSize(W,H); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+      renderer.setClearColor(0x050810,1); renderer.shadowMap.enabled=true;
       mount.appendChild(renderer.domElement);
 
-      // ── Scene ──────────────────────────────────────────────────────────────────
-      const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x0a0a0f, 50, 100);
+      const scene=new THREE.Scene();
+      scene.fog=new THREE.Fog(0x050810,50,120);
+      const camera=new THREE.PerspectiveCamera(60,W/H,.1,200);
+      camera.position.set(0,0,CAM_Z);
 
-      const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 200);
-      camera.position.set(0, 0, CAMERA_Z);
+      // Lights
+      scene.add(new THREE.AmbientLight(0x1a1a2e,1.2));
+      const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(8,10,8); dir.castShadow=true; scene.add(dir);
+      const pL1=new THREE.PointLight(0xff0066,2.5,40); pL1.position.set(-8,4,6); scene.add(pL1);
+      const pL2=new THREE.PointLight(0x00ffcc,2.5,40); pL2.position.set(8,-4,6); scene.add(pL2);
+      scene.add(new THREE.PointLight(0x8844ff,1.5,30));
 
-      // ── Lighting ───────────────────────────────────────────────────────────────
-      // Ambient light for base illumination
-      scene.add(new THREE.AmbientLight(0x1a1a2e, 0.8));
+      // Grid
+      const grid=new THREE.GridHelper(30,30,0x444466,0x222233);
+      grid.position.y=-6; grid.material.transparent=true; grid.material.opacity=.3; scene.add(grid);
 
-      // Directional light for shadows
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      dirLight.position.set(8, 10, 8);
-      dirLight.castShadow = true;
-      dirLight.shadow.camera.left = -15;
-      dirLight.shadow.camera.right = 15;
-      dirLight.shadow.camera.top = 15;
-      dirLight.shadow.camera.bottom = -15;
-      dirLight.shadow.mapSize.width = 2048;
-      dirLight.shadow.mapSize.height = 2048;
-      scene.add(dirLight);
+      // Default hero: TorusKnot chrome
+      const geo=new THREE.TorusKnotGeometry(1.2,.4,128,16);
+      const mat=new THREE.MeshStandardMaterial({color:0xcccccc,metalness:.95,roughness:.05});
+      const hero=new THREE.Mesh(geo,mat); hero.castShadow=true; hero.receiveShadow=true; scene.add(hero);
 
-      // Three dynamic point lights with hand-responsive colors
-      const pLight1 = new THREE.PointLight(0xff0066, 2, 40);
-      pLight1.position.set(-8, 4, 6);
-      pLight1.castShadow = true;
-      scene.add(pLight1);
-
-      const pLight2 = new THREE.PointLight(0x00ffcc, 2, 40);
-      pLight2.position.set(8, -4, 6);
-      pLight2.castShadow = true;
-      scene.add(pLight2);
-
-      const pLight3 = new THREE.PointLight(0x8844ff, 1.5, 30);
-      pLight3.position.set(0, 6, -8);
-      scene.add(pLight3);
-
-      // ── Grid floor ─────────────────────────────────────────────────────────────
-      const grid = new THREE.GridHelper(30, 30, 0x444466, 0x222233);
-      grid.position.y = -6;
-      grid.material.transparent = true;
-      grid.material.opacity = 0.3;
-      scene.add(grid);
-
-      // ── Create TorusKnot geometry with chrome material ───────────────────────────
-      const torusKnotGeo = new THREE.TorusKnotGeometry(1.2, 0.4, 128, 16);
-      const chromeMaterial = new THREE.MeshStandardMaterial({
-        color: 0xcccccc,
-        metalness: 0.9, // ← High metalness for chrome
-        roughness: 0.1, // ← Low roughness for mirror-like finish
-        envMapIntensity: 1,
+      // Hand markers
+      const markers=[0xff0066,0x00ffcc].map(c=>{
+        const m=new THREE.Mesh(new THREE.SphereGeometry(.15,16,16),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.7}));
+        m.visible=false; scene.add(m); return m;
       });
-      const torusKnot = new THREE.Mesh(torusKnotGeo, chromeMaterial);
-      torusKnot.castShadow = true;
-      torusKnot.receiveShadow = true;
-      torusKnot.scale.setScalar(0.8);
-      scene.add(torusKnot);
 
-      // ── Hand position markers (visual debugging) ───────────────────────────────
-      const handMarkers = [];
-      for (let i = 0; i < 2; i++) {
-        const marker = new THREE.Mesh(
-          new THREE.SphereGeometry(0.15, 16, 16),
-          new THREE.MeshBasicMaterial({
-            color: i === 0 ? 0xff0066 : 0x00ffcc,
-            transparent: true,
-            opacity: 0.6,
-          }),
-        );
-        marker.visible = false;
-        scene.add(marker);
-        handMarkers.push(marker);
-      }
+      stateRef.current={renderer,scene,camera,hero,markers,pL1,pL2,geo,mat};
 
-      // Save refs
-      stateRef.current = {
-        renderer,
-        scene,
-        camera,
-        torusKnot,
-        handMarkers,
-        pLight1,
-        pLight2,
-        pLight3,
-        dirLight,
-      };
+      // Animation loop
+      const animate=()=>{
+        rafRef.current=requestAnimationFrame(animate);
+        const now=performance.now();
+        if(!stateRef.current)return;
+        const {renderer,scene,camera,hero,markers,pL1,pL2}=stateRef.current;
+        const hd=handsRef?.current;
 
-      // ── Animation loop ─────────────────────────────────────────────────────────
-      let prevTime = performance.now();
-
-      const animate = () => {
-        rafRef.current = requestAnimationFrame(animate);
-        const now = performance.now();
-        const dt = (now - prevTime) / 1000;
-        prevTime = now;
-
-        if (!stateRef.current) return;
-        const {
-          renderer,
-          scene,
-          camera,
-          torusKnot,
-          handMarkers,
-          pLight1,
-          pLight2,
-        } = stateRef.current;
-
-        const handsData = handsRef?.current;
-
-        if (handsData && handsData.hands && handsData.hands.length >= 2) {
-          // ─── TWO-HAND CONTROLLER ──────────────────────────────────────────────
-          const leftHand = handsData.hands.find((h) => h.handedness === "Left");
-          const rightHand = handsData.hands.find(
-            (h) => h.handedness === "Right",
-          );
-
-          if (leftHand && rightHand) {
-            handCountRef.current = 2;
-
-            // Get palm position (landmark 0)
-            const leftPalm = lmToWorld(leftHand.landmarks[0]);
-            const rightPalm = lmToWorld(rightHand.landmarks[0]);
-
-            // ── POSITION: Center between both palms ────────────────────────────
-            targetPos.current.x = (leftPalm.x + rightPalm.x) * 0.5;
-            targetPos.current.y = (leftPalm.y + rightPalm.y) * 0.5;
-            targetPos.current.z = (leftPalm.z + rightPalm.z) * 0.5;
-
-            // ── SCALE: Distance between hands ─────────────────────────────────
-            const handDist = distance3D(leftPalm, rightPalm);
-            handDistanceRef.current = handDist;
-            // Map distance [0.15, 1.2] to scale [0.3, 2.5]
-            targetScale.current = THREE.MathUtils.mapLinear(
-              handDist,
-              HAND_DISTANCE_MIN,
-              HAND_DISTANCE_MAX,
-              0.3,
-              2.5,
-            );
-
-            // ── ROTATION: Vector between hands (steering wheel) ───────────────
-            const handVector = new THREE.Vector3(
-              rightPalm.x - leftPalm.x,
-              rightPalm.y - leftPalm.y,
-              rightPalm.z - leftPalm.z,
-            ).normalize();
-
-            // Map hand vector to euler angles
-            // Y rotation: left-right tilt (hand vector X component)
-            // Z rotation: front-back tilt (hand vector Y component)
-            targetRotEuler.current.x = 0;
-            targetRotEuler.current.y = handVector.x * Math.PI * 0.6; // ← Steering Y
-            targetRotEuler.current.z = handVector.y * Math.PI * 0.4; // ← Steering Z
-
-            // Update hand markers
-            const lp = lmToWorld(leftHand.landmarks[9]); // Middle finger middle
-            handMarkers[0].position.set(lp.x, lp.y, lp.z);
-            handMarkers[0].visible = true;
-
-            const rp = lmToWorld(rightHand.landmarks[9]);
-            handMarkers[1].position.set(rp.x, rp.y, rp.z);
-            handMarkers[1].visible = true;
-          } else if (handsData.hands.length === 1) {
-            // Single hand: just track position
-            const hand = handsData.hands[0];
-            handCountRef.current = 1;
-
-            const palm = lmToWorld(hand.landmarks[0]);
-            targetPos.current.set(palm.x, palm.y, palm.z);
-            targetScale.current = 1.0;
-
-            handMarkers[0].position.copy(targetPos.current);
-            handMarkers[0].visible = true;
-            handMarkers[1].visible = false;
+        if(hd?.hands?.length>=2){
+          const L=hd.hands.find(h=>h.handedness==="Left");
+          const R=hd.hands.find(h=>h.handedness==="Right");
+          if(L&&R){
+            hcRef.current=2;
+            const lp=lmW(L.landmarks[0]), rp=lmW(R.landmarks[0]);
+            tPos.current.set((lp.x+rp.x)*.5,(lp.y+rp.y)*.5,(lp.z+rp.z)*.5);
+            const dist=d3(lp,rp); hdRef.current=dist;
+            tScale.current=THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(dist,D_MIN,D_MAX,.3,2.5),.2,3);
+            const v=new THREE.Vector3(rp.x-lp.x,rp.y-lp.y,rp.z-lp.z).normalize();
+            tRY.current=v.x*Math.PI*.6;
+            tRZ.current=v.y*Math.PI*.4;
+            const ml=lmW(L.landmarks[9]),mr=lmW(R.landmarks[9]);
+            markers[0].position.set(ml.x,ml.y,ml.z); markers[0].visible=true;
+            markers[1].position.set(mr.x,mr.y,mr.z); markers[1].visible=true;
           }
-        } else {
-          handCountRef.current = 0;
-          handMarkers.forEach((m) => (m.visible = false));
+        }else if(hd?.hands?.length===1){
+          hcRef.current=1;
+          const p=lmW(hd.hands[0].landmarks[0]); tPos.current.set(p.x,p.y,p.z);
+          tScale.current=1; markers[0].position.copy(tPos.current); markers[0].visible=true; markers[1].visible=false;
+        }else{
+          hcRef.current=0; tPos.current.set(0,0,0); tScale.current=1;
+          markers.forEach(m=>m.visible=false);
+          tRY.current+=.005; // idle spin
         }
 
-        // ── SMOOTH INTERPOLATION ──────────────────────────────────────────────
-        lerpVec3(currentPos.current, targetPos.current, LERP_POSITION);
-        lerpEuler(
-          currentRotEuler.current,
-          targetRotEuler.current,
-          LERP_ROTATION,
-        );
-        currentScale.current = THREE.MathUtils.lerp(
-          currentScale.current,
-          targetScale.current,
-          LERP_SCALE,
-        );
+        // Lerp
+        lerp3(cPos.current,tPos.current,LP);
+        // ← CORRECT: direct property assignment, NOT setFromEuler
+        hero.rotation.y=THREE.MathUtils.lerp(hero.rotation.y,tRY.current,LR);
+        hero.rotation.z=THREE.MathUtils.lerp(hero.rotation.z,tRZ.current,LR);
+        hero.rotation.x+=.002; // constant slow tilt
+        cScale.current=THREE.MathUtils.lerp(cScale.current,tScale.current,LS);
+        hero.position.copy(cPos.current);
+        hero.scale.setScalar(cScale.current);
 
-        // ── UPDATE OBJECT ────────────────────────────────────────────────────
-        if (torusKnot && typeof torusKnot.rotation?.setFromEuler === 'function') {
-          torusKnot.position.copy(currentPos.current);
-          torusKnot.rotation.setFromEuler(currentRotEuler.current);
-          torusKnot.scale.setScalar(currentScale.current);
+        // Dynamic lighting
+        if(hcRef.current===2){
+          const t=THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(hdRef.current,D_MIN,D_MAX,0,1),0,1);
+          pL1.color.lerpColors(new THREE.Color(0xff3366),new THREE.Color(0x00ffcc),t);
+          pL1.intensity=2+Math.sin(now*.003)*.5;
+        }
+        const tOrb=now*.0005;
+        pL2.position.x=Math.sin(tOrb)*10; pL2.position.z=Math.cos(tOrb)*8;
+
+        // Throttled UI update (250ms)
+        if(now-uiTimer.current>250){
+          uiTimer.current=now;
+          const c=hcRef.current;
+          setHandCount(c);
+          setStatus(c===2?"✓ 2 hands — full control":c===1?"⚡ 1 hand":"waiting for hands…");
         }
 
-        // ── DYNAMIC LIGHTING: Color by hand distance ────────────────────────
-        if (handCountRef.current === 2) {
-          const handDist = handDistanceRef.current;
-          const t = Math.max(0, Math.min(1, (handDist - HAND_DISTANCE_MIN) / (HAND_DISTANCE_MAX - HAND_DISTANCE_MIN)));
-          const closeColor = new THREE.Color(0xff3366);
-          const farColor   = new THREE.Color(0x00ffcc);
-          pLight1.color.lerpColors(closeColor, farColor, t);
-          pLight1.intensity = 2 + Math.sin(now * 0.003) * 0.5;
-        }
-
-        // ── THROTTLED UI STATE UPDATE (max 4x/sec) ────────────────────────────
-        if (now - lastUIUpdate.current > 250) {
-          lastUIUpdate.current = now;
-          const cnt = handCountRef.current;
-          setHandCount(cnt);
-          setStatus(cnt === 2 ? "tracking 2 hands ✓" : cnt === 1 ? "tracking 1 hand" : "waiting for hands…");
-        }
-
-        // ── ORBITING SECONDARY LIGHTS ────────────────────────────────────────
-        const t = now * 0.0005;
-        pLight2.position.x = Math.sin(t) * 10;
-        pLight2.position.z = Math.cos(t) * 8;
-
-        renderer.render(scene, camera);
+        renderer.render(scene,camera);
       };
-
       animate();
 
-      // ── Resize handler ────────────────────────────────────────────────────────
-      const onResize = () => {
-        const W2 = mount.clientWidth,
-          H2 = mount.clientHeight;
-        camera.aspect = W2 / H2;
-        camera.updateProjectionMatrix();
-        renderer.setSize(W2, H2);
-      };
-      window.addEventListener("resize", onResize);
+      const onResize=()=>{ const W2=mount.clientWidth,H2=mount.clientHeight;camera.aspect=W2/H2;camera.updateProjectionMatrix();renderer.setSize(W2,H2); };
+      window.addEventListener("resize",onResize);
+      return()=>{ cancelAnimationFrame(rafRef.current);window.removeEventListener("resize",onResize);renderer.dispose();geo.dispose();mat.dispose();if(mount.contains(renderer.domElement))mount.removeChild(renderer.domElement); };
+    }catch(e){ console.error(e); setErr(e?.message||String(e)); }
+  },[]);
 
-      return () => {
-        cancelAnimationFrame(rafRef.current);
-        window.removeEventListener("resize", onResize);
-        renderer.dispose();
-        torusKnotGeo.dispose();
-        chromeMaterial.dispose();
-        if (mount.contains(renderer.domElement))
-          mount.removeChild(renderer.domElement);
-      };
-    } catch (e) {
-      console.error("SpatialObjectController init failed:", e);
-      setInitError(e?.message || String(e));
+  // ── Load uploaded model ────────────────────────────────────────────────────
+  useEffect(()=>{
+    if(!uploadedModelFile||!stateRef.current)return;
+    const {scene,hero:old}=stateRef.current;
+    const name=uploadedModelFile.name.toLowerCase();
+    const url=URL.createObjectURL(uploadedModelFile);
+    setStatus("loading model…");
+
+    const onOK=model=>{ scene.remove(old);fitAndCenter(model);scene.add(model);stateRef.current.hero=model;setModelInfo(uploadedModelFile.name);URL.revokeObjectURL(url); };
+    const onErr=e=>{ console.error(e);setStatus("⚠ model load failed");URL.revokeObjectURL(url); };
+
+    if(name.endsWith(".glb")||name.endsWith(".gltf")){
+      new GLTFLoader().load(url,g=>onOK(g.scene),undefined,onErr);
+    }else if(name.endsWith(".obj")){
+      new OBJLoader().load(url,onOK,undefined,onErr);
+    }else{
+      setStatus(`⚠ unsupported: ${uploadedModelFile.name}`);
+      URL.revokeObjectURL(url);
     }
-  }, []);
+  },[uploadedModelFile]);
 
+  // ── JSX ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {initError && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0,0,0,0.85)",
-            color: "#ff6666",
-            padding: 20,
-            textAlign: "center",
-            zIndex: 999,
-            fontFamily: "monospace",
-            fontSize: 12,
-          }}
-        >
+    <div style={{position:"relative",width:"100%",height:"100%"}}>
+      {err&&(
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.92)",color:"#ff6666",padding:20,textAlign:"center",zIndex:99,fontFamily:"monospace",fontSize:11}}>
           <div>
-            <div style={{ fontWeight: "bold", marginBottom: 8 }}>
-              3D view failed to initialize
-            </div>
-            <div>{initError}</div>
-            <div style={{ marginTop: 10, opacity: 0.8 }}>
-              Try disabling 3D mode and reload the page.
-            </div>
+            <div style={{fontWeight:"bold",marginBottom:8}}>3D init failed</div>
+            <div style={{opacity:.8}}>{err}</div>
+            <div style={{marginTop:10,opacity:.5,fontSize:9}}>Disable 3D and reload the page.</div>
           </div>
         </div>
       )}
-
-      {/* THREE.js canvas */}
-      <div
-        ref={mountRef}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-        }}
-      />
-
-      {/* Status info (clean, no gesture text) */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 10,
-          left: 10,
-          pointerEvents: "none",
-          fontFamily: "monospace",
-          fontSize: "11px",
-          color: "#00ffcc",
-          textShadow: "0 0 8px #00ffcc",
-          zIndex: 10,
-        }}
-      >
-        <div>{status}</div>
-        <div style={{ fontSize: "10px", opacity: 0.6, marginTop: "4px" }}>
-          hands: {handCount} | scale: {currentScale.current.toFixed(2)}x
-        </div>
+      <div ref={mountRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>
+      {/* Status */}
+      <div style={{position:"absolute",bottom:8,left:10,pointerEvents:"none",fontFamily:"monospace",fontSize:10,color:"#00ffcc",textShadow:"0 0 8px #00ffcc",zIndex:10}}>
+        {status}
+        <div style={{fontSize:8,opacity:.45,marginTop:2}}>hands:{handCount} · scale:{cScale.current.toFixed(2)}x · {modelInfo}</div>
       </div>
-
-      {/* Info panel */}
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          pointerEvents: "none",
-          fontFamily: "monospace",
-          fontSize: "10px",
-          color: "#888899",
-          background: "rgba(0,0,0,0.3)",
-          padding: "8px 12px",
-          borderRadius: "4px",
-          border: "1px solid rgba(0,255,204,0.1)",
-        }}
-      >
-        <div>🎯 Spatial 3D Controller</div>
-        <div style={{ fontSize: "9px", marginTop: "4px", opacity: 0.7 }}>
-          • Dual hand control
-          <br />• Distance → scale
-          <br />• Vector → rotation
-          <br />• Responsive lighting
-        </div>
+      {/* Legend */}
+      <div style={{position:"absolute",top:8,right:8,pointerEvents:"none",fontFamily:"monospace",fontSize:8,color:"#556",background:"rgba(0,0,0,0.45)",padding:"7px 11px",borderRadius:3,border:"1px solid rgba(0,255,204,0.08)",zIndex:10,lineHeight:1.7}}>
+        🎯 Spatial 3D<br/>
+        <span style={{fontSize:7,opacity:.7}}>
+          · both hands → scale + rotate<br/>
+          · distance → scale<br/>
+          · tilt → y/z rotation<br/>
+          · upload GLB in Upload tab
+        </span>
       </div>
     </div>
   );
