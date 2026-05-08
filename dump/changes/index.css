@@ -1,4 +1,4 @@
-/* Reset all Vite defaults — Emoji Mirror needs full control */
+/* Reset all Vite defaults — Voxis needs full control */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {

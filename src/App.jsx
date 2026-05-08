@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import SpatialObjectController from "./components/SpatialObjectController";
 import { useFaceTracker } from "./utils/useFaceTracker";
-
+import engineLoop from "./engine/core/EngineLoop";
+import DebugOverlay from "./engine/debug/DebugOverlay";
+import interactionMachine from "./engine/interaction/InteractionMachine";
+import inputManager from "./engine/input/InputManager";
 // ─── HAND DRAWING ─────────────────────────────────────────────────────────────
 const CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
@@ -80,17 +83,6 @@ function beep(freq=440,type="sine",dur=0.15,vol=0.18){
   try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,c.currentTime);g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);o.start();o.stop(c.currentTime+dur);}catch(e){}
 }
 
-// ─── PARTICLES / EMOJI RAIN ───────────────────────────────────────────────────
-const mkParticles = (n=80)=>Array.from({length:n},(_,i)=>({
-  id:Date.now()+i, x:Math.random()*100, y:-10-Math.random()*20,
-  vx:(Math.random()-.5)*3, vy:2+Math.random()*3,
-  color:["#ff00aa","#00ffcc","#ffcc00","#ff8800","#8888ff","#44ccff"][~~(Math.random()*6)],
-  size:6+Math.random()*8, rot:Math.random()*360,
-}));
-const mkRain = emoji=>Array.from({length:30},(_,i)=>({
-  id:Date.now()+i+1000, emoji, x:Math.random()*100, y:-5-Math.random()*10,
-  vx:(Math.random()-.5), vy:1.5+Math.random()*2, rot:Math.random()*30-15, size:20+Math.random()*20,
-}));
 
 // ─── COMBOS ───────────────────────────────────────────────────────────────────
 const COMBOS = {
@@ -117,7 +109,7 @@ const btn = (T,active=false,color=null)=>({
 });
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
-export default function EmojiMirror() {
+export default function voxis() {
   const {handLandmarkerRef,loadModel,detectFromImage:hookDetect,startDetectionLoop:hookLoop}=useFaceTracker();
 
   // Refs
@@ -231,6 +223,8 @@ export default function EmojiMirror() {
     if(lm) handsRef.current={hands:[{landmarks:lm,handedness:"Right"}],count:1};
     else   handsRef.current=null;
     setGesture(g);
+    inputManager.processGesture(g);
+    interactionMachine.update(g);
     if(g==="none"||g==="unknown")return;
     if(cooldownRef.current)return;
     if(g===lastGestRef.current)return;
@@ -304,46 +298,6 @@ triggerAction(detectedGesture, lm);}
   },[modelReady,handLandmarkerRef,hookDetect,triggerAction,drawGrid,imgFile]);
 
 
-  <div
-  style={{
-    display: "flex",
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 10,
-  }}
->
-  <button
-    onClick={() => setRenderMode("safe")}
-    style={{
-      background:
-        renderMode === "safe" ? "#00ffcc" : "#111",
-      color:
-        renderMode === "safe" ? "#000" : "#00ffcc",
-      border: "1px solid #00ffcc",
-      padding: "6px 12px",
-      cursor: "pointer",
-    }}
-  >
-    ⚡ SAFE
-  </button>
-
-  <button
-    onClick={() => setRenderMode("luxury")}
-    style={{
-      background:
-        renderMode === "luxury" ? "#00ffcc" : "#111",
-      color:
-        renderMode === "luxury" ? "#000" : "#00ffcc",
-      border: "1px solid #00ffcc",
-      padding: "6px 12px",
-      cursor: "pointer",
-    }}
-  >
-    💎 LUXURY
-  </button>
-</div>
-
-
   // ── Video/webcam loop ─────────────────────────────────────────────────────
   const startLoop = useCallback((videoEl,mirror=false)=>{
     const onFrame=(handsData,canvas)=>{
@@ -413,6 +367,21 @@ triggerAction(detectedGesture, lm);}
 
   useEffect(()=>()=>stopAll(),[stopAll]);
 
+  useEffect(() => {
+    engineLoop.start((delta) => {
+      // future engine systems update here
+  
+      // example:
+      // updateInput(delta)
+      // updateVoxelWorld(delta)
+      // updateInteraction(delta)
+    });
+  
+    return () => {
+      engineLoop.stop();
+    };
+  }, []);
+
   // ── Particle animations ───────────────────────────────────────────────────
   useEffect(()=>{
     if(!particles.length)return;
@@ -434,7 +403,7 @@ triggerAction(detectedGesture, lm);}
   return (
     <div style={{background:T.bg,color:T.text,fontFamily:"'Courier New',monospace",minHeight:"100vh",padding:0,margin:0}}>
       <video ref={videoRef} style={{display:"none"}} playsInline muted />
-
+      <DebugOverlay />
       {/* Overlays */}
       {particles.map(p=><div key={p.id} style={{position:"fixed",left:`${p.x}%`,top:`${p.y}%`,width:p.size,height:p.size,background:p.color,transform:`rotate(${p.rot}deg)`,pointerEvents:"none",zIndex:60,borderRadius:"50%"}}/>)}
       {rain.map(p=><div key={p.id} style={{position:"fixed",left:`${p.x}%`,top:`${p.y}%`,fontSize:p.size,transform:`rotate(${p.rot}deg)`,pointerEvents:"none",zIndex:61,lineHeight:1}}>{p.emoji}</div>)}
@@ -446,10 +415,48 @@ triggerAction(detectedGesture, lm);}
 
         {/* ── HEADER ── */}
         <div style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-          <div>
-            <div style={{fontSize:20,fontWeight:"bold",letterSpacing:4,color:T.accent}}>🪞 EMOJI MIRROR</div>
-            <div style={{fontSize:8,color:T.dim,letterSpacing:2,marginTop:2}}>Gesture · Hand Tracking · 3D Physics</div>
-          </div>
+        <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+  }}
+>
+  <img
+    src="/voxis-logo.png"
+    alt="VOXIS"
+    style={{
+      width: 32,
+      height: 32,
+      objectFit: "contain",
+      filter: "drop-shadow(0 0 8px #00ffcc)",
+    }}
+  />
+
+  <div>
+    <div
+      style={{
+        fontSize: 22,
+        fontWeight: "bold",
+        letterSpacing: 4,
+        color: T.accent,
+      }}
+    >
+      VOXIS
+    </div>
+
+    <div
+      style={{
+        fontSize: 8,
+        color: T.dim,
+        letterSpacing: 2,
+        marginTop: 2,
+      }}
+    >
+      Spatial Interaction Engine
+    </div>
+  </div>
+</div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:8,color:modelReady?"#00ffcc":"#ff8800",letterSpacing:1,marginRight:4}}>{modelReady?"● READY":"○ LOADING"}</span>
             {(videoPlay||camActive)&&<span style={{fontSize:8,color:T.dim}}>{fps}fps</span>}

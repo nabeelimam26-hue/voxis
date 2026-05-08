@@ -1,4 +1,4 @@
-# Emoji Mirror Refactoring - Complete Guide
+# voxis Refactoring - Complete Guide
 
 ## What Was Done
 
@@ -111,7 +111,7 @@ const LERP_ALPHA = 0.1; // ← This is your magic number!
 ## File Location Reference
 
 ```
-emoji-mirror/
+voxis/
 ├── src/
 │   ├── App.jsx                    ← Main app (refactored)
 │   ├── components/
@@ -218,7 +218,7 @@ This is especially important on mobile devices where frame rate might fluctuate.
 
 ## Summary
 
-Your refactored **emoji-mirror** project now has:
+Your refactored **voxis** project now has:
 
 1. ✅ **Modular 3D Logic** - Separated into `EmojiScene.jsx`
 2. ✅ **Custom AI Hook** - All hand tracking in `useFaceTracker.js`

@@ -80,17 +80,6 @@ function beep(freq=440,type="sine",dur=0.15,vol=0.18){
   try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,c.currentTime);g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);o.start();o.stop(c.currentTime+dur);}catch(e){}
 }
 
-// ─── PARTICLES / EMOJI RAIN ───────────────────────────────────────────────────
-const mkParticles = (n=80)=>Array.from({length:n},(_,i)=>({
-  id:Date.now()+i, x:Math.random()*100, y:-10-Math.random()*20,
-  vx:(Math.random()-.5)*3, vy:2+Math.random()*3,
-  color:["#ff00aa","#00ffcc","#ffcc00","#ff8800","#8888ff","#44ccff"][~~(Math.random()*6)],
-  size:6+Math.random()*8, rot:Math.random()*360,
-}));
-const mkRain = emoji=>Array.from({length:30},(_,i)=>({
-  id:Date.now()+i+1000, emoji, x:Math.random()*100, y:-5-Math.random()*10,
-  vx:(Math.random()-.5), vy:1.5+Math.random()*2, rot:Math.random()*30-15, size:20+Math.random()*20,
-}));
 
 // ─── COMBOS ───────────────────────────────────────────────────────────────────
 const COMBOS = {
@@ -117,7 +106,7 @@ const btn = (T,active=false,color=null)=>({
 });
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
-export default function EmojiMirror() {
+export default function VOXIS() {
   const {handLandmarkerRef,loadModel,detectFromImage:hookDetect,startDetectionLoop:hookLoop}=useFaceTracker();
 
   // Refs
@@ -408,7 +397,7 @@ export default function EmojiMirror() {
         {/* ── HEADER ── */}
         <div style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
           <div>
-            <div style={{fontSize:20,fontWeight:"bold",letterSpacing:4,color:T.accent}}>🪞 EMOJI MIRROR</div>
+            <div style={{fontSize:20,fontWeight:"bold",letterSpacing:4,color:T.accent}}>VOXIS</div>
             <div style={{fontSize:8,color:T.dim,letterSpacing:2,marginTop:2}}>Gesture · Hand Tracking · 3D Physics</div>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Your emoji-mirror project is now **fully compatible with all models** in the `/public/models/` folder! Users can easily switch between different 3D models while the application is running.
+Your voxis project is now **fully compatible with all models** in the `/public/models/` folder! Users can easily switch between different 3D models while the application is running.
 
 ---
 
@@ -288,4 +288,4 @@ src/
 ✅ **Easy expansion** - Add new models with 2 lines of code  
 ✅ **No breaking changes** - All existing features work perfectly  
 
-Your emoji-mirror is now a **flexible 3D model viewer**! 🚀
+Your voxis is now a **flexible 3D model viewer**! 🚀

@@ -1,38 +1,133 @@
-## voxis ##
+﻿# VOXIS
 
-> **An interactive AI experience bridging the gap between Java logic and 3D web environments.**
+<p align="center">
+  <img src="./public/branding/voxis-logo.png" width="140" />
+</p>
+
+<p align="center">
+  Cyberpunk Spatial Interaction Engine
+</p>
 
 ---
 
-## 👤 Developer Profile
-* **Owner:** Mohammed Nabeel (Farhan)
-* **Location:** Patna, Bihar, India
-* **Education:** ICSE Class 9 Student
-* **Focus:** Transitioning from **Core Java** logic into **Full-Stack AI development**.
+## Overview
 
-## 🛠️ Technical Stack
-| Category | Technology |
-| :--- | :--- |
-| **Frontend** | React 19 & Vite |
-| **3D Rendering** | Three.js |
-| **AI / Vision** | MediaPipe Tasks Vision |
-| **Foundational Logic** | Core Java Principles |
+VOXIS is a realtime spatial interaction engine focused on:
 
-## 🚀 Project Overview
-This project uses **Computer Vision** to map facial landmarks onto a 3D emoji mesh. It applies the technical problem-solving habits I've built through troubleshooting software and learning programming fundamentals.
+- voxel-based interaction
+- gesture-controlled manipulation
+- realtime 3D spatial systems
+- immersive holographic UI
+- adaptive rendering pipelines
 
-### **Key Logic Implemented:**
-1. **Data Mapping:** Converting raw facial coordinates into 3D rotations.
-2. **Encapsulation:** Managing the state of the 3D scene independently from the video feed.
-3. **Performance:** Optimized for smooth rendering in modern browsers.
+Originally started as a gesture/effect mirror experiment, the project evolved into a modular spatial interaction platform powered by:
 
-## 💻 How to Run
+- React
+- Three.js
+- MediaPipe
+- Vite
+
+---
+
+## Core Features
+
+### Spatial Interaction
+- gesture-based controls
+- dual-hand scaling
+- dual-hand rotation
+- smooth lerped movement
+- realtime spatial manipulation
+
+### Rendering
+- SAFE rendering mode
+- LUXURY rendering mode
+- adaptive performance scaling
+- cinematic lighting
+- mobile optimization
+
+### Architecture
+- modular engine systems
+- centralized engine loop
+- interaction state engine
+- reusable hooks/utilities
+- scalable rendering systems
+
+### Debugging Systems
+- debug overlay
+- centralized engine state
+- interaction state machine
+- render performance monitoring
+
+---
+
+## Project Structure
+
+```txt
+src/
+├── engine/
+├── components/
+├── hooks/
+├── utils/
+├── constants/
+└── debug/
+```
+
+---
+
+## Current Direction
+
+VOXIS is transitioning toward:
+
+- voxel sandbox interaction
+- chunk systems
+- terrain editing
+- spatial manipulation tools
+- immersive voxel environments
+
+The project intentionally avoids:
+- effect spam
+- chaotic overlays
+- unnecessary gimmicks
+- visual clutter
+
+Focus remains on:
+- interaction quality
+- smoothness
+- architecture
+- scalability
+- immersive UX
+
+---
+
+## Visual Identity
+
+VOXIS follows a:
+- cyberpunk aesthetic
+- holographic interface style
+- neon cyan/purple palette
+- minimalist futuristic design language
+
+---
+
+## Engine Philosophy
+
+Interaction over effects.
+
+Systems over gimmicks.
+
+Smoothness over clutter.
+
+---
+
+## Development
+
 ```bash
-# Clone the repository
-git clone [https://github.com/nabeelimam26-hue/emoji-mirror.git](https://github.com/nabeelimam26-hue/emoji-mirror.git)
-
-# Install dependencies
 npm install
-
-# Start the dev server
 npm run dev
+```
+
+---
+
+## Status
+
+Actively evolving into a browser-native spatial voxel interaction engine.
