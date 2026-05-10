@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import SpatialObjectController from "./components/SpatialObjectController";
 import { useFaceTracker } from "./utils/useFaceTracker";
-import engineLoop from "./engine/core/EngineLoop";
-import DebugOverlay from "./engine/debug/DebugOverlay";
+import DebugOverlayBase from "./engine/debug/DebugOverlay";
 import interactionMachine from "./engine/interaction/InteractionMachine";
 import inputManager from "./engine/input/InputManager";
 
@@ -111,8 +110,10 @@ function drawHand(ctx, lm, w, h) {
   ctx.shadowBlur = 0;
 }
 
+const DebugOverlay = memo(DebugOverlayBase);
+
 export default function Voxis() {
-  const { handLandmarkerRef, loadModel, detectFromImage: hookDetect, startDetectionLoop: hookLoop } = useFaceTracker();
+  const { handLandmarkerRef, loadModel, detectFromImage: hookDetect, startDetectionLoop: hookLoop, stopDetectionLoop } = useFaceTracker();
 
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
@@ -122,6 +123,7 @@ export default function Voxis() {
   const drawRef = useRef(false);
   const pathRef = useRef([]);
   const handsRef = useRef(null);
+  const gestureStateRef = useRef({ gesture: "none", trackedHands: 0, lastLoggedGesture: "none", lastLogAt: 0 });
 
   const [renderMode, setRenderMode] = useState("luxury");
   const [theme, setTheme] = useState("dark");
@@ -195,7 +197,7 @@ export default function Voxis() {
 
   const stopAll = useCallback(() => {
     if (loopRef.current) {
-      cancelAnimationFrame(loopRef.current.id);
+      stopDetectionLoop(loopRef.current);
       loopRef.current = null;
     }
     if (streamRef.current) {
@@ -213,7 +215,8 @@ export default function Voxis() {
     setGesture("none");
     setFps(0);
     handsRef.current = null;
-  }, []);
+    gestureStateRef.current = { gesture: "none", trackedHands: 0, lastLoggedGesture: "none", lastLogAt: 0 };
+  }, [stopDetectionLoop]);
 
   const loadMPModel = useCallback(async (mode) => {
     setModelReady(false);
@@ -226,15 +229,39 @@ export default function Voxis() {
     loadMPModel("image");
   }, [drawGrid, loadMPModel]);
 
-  const triggerAction = useCallback((g, lm) => {
-    handsRef.current = lm ? { hands: [{ landmarks: lm, handedness: "Right" }], count: 1 } : null;
-    setTrackedHands(lm ? 1 : 0);
+  const triggerAction = useCallback((g, lm, handCount = lm ? 1 : 0) => {
+    if (!lm) {
+      handsRef.current = null;
+    } else if (handCount <= 1) {
+      handsRef.current = { hands: [{ landmarks: lm, handedness: "Right" }], count: handCount };
+    }
+
+    const state = gestureStateRef.current;
+    const gestureChanged = state.gesture !== g;
+    const handCountChanged = state.trackedHands !== handCount;
+
+    if (handCountChanged) {
+      state.trackedHands = handCount;
+      setTrackedHands(handCount);
+    }
+
+    if (!gestureChanged) return;
+
+    state.gesture = g;
     setGesture(g);
     inputManager.processGesture(g);
     interactionMachine.update(g);
+
     if (g === "none" || g === "unknown") return;
-    setGCount((p) => ({ ...p, [g]: (p[g] || 0) + 1 }));
-    setLog((p) => [{ gesture: g, meta: GESTURE_META[g], time: new Date().toLocaleTimeString() }, ...p.slice(0, 49)]);
+
+    const now = performance.now();
+    if (state.lastLoggedGesture !== g || now - state.lastLogAt > 1200) {
+      state.lastLoggedGesture = g;
+      state.lastLogAt = now;
+      setGCount((p) => ({ ...p, [g]: (p[g] || 0) + 1 }));
+      setLog((p) => [{ gesture: g, meta: GESTURE_META[g], time: new Date().toLocaleTimeString() }, ...p.slice(0, 49)]);
+    }
+
     if (g === "point") {
       setDrawMode((m) => {
         const next = !m;
@@ -272,6 +299,7 @@ export default function Voxis() {
     setDrawMode(false);
     drawRef.current = false;
     pathRef.current = [];
+    gestureStateRef.current = { gesture: "none", trackedHands: 0, lastLoggedGesture: "none", lastLogAt: 0 };
     drawGrid();
     loadMPModel(mode);
   }, [stopAll, drawGrid, loadMPModel]);
@@ -293,7 +321,7 @@ export default function Voxis() {
         const lm = res?.hands ? res.hands[0]?.landmarks : res;
         if (lm) {
           drawHand(ctx, lm, cv.width, cv.height);
-          triggerAction(classifyGesture(lm), lm);
+          triggerAction(classifyGesture(lm), lm, 1);
         } else {
           handsRef.current = null;
           triggerAction("none", null);
@@ -351,16 +379,21 @@ export default function Voxis() {
         if (lm) {
           drawHand(ctx, lm, canvas.width, canvas.height);
           updateDraw(lm, canvas.width, canvas.height);
-          triggerAction(classifyGesture(lm), lm);
+          triggerAction(classifyGesture(lm), lm, handsData.count || handsData.hands?.length || 1);
         }
       } else {
         handsRef.current = null;
-        triggerAction("none", null);
+        triggerAction("none", null, 0);
       }
       tickFps();
     };
-    loopRef.current = hookLoop(videoEl, canvasRef, onFrame, mirror);
-  }, [T.grid, hookLoop, triggerAction, updateDraw, tickFps]);
+    if (loopRef.current) {
+      stopDetectionLoop(loopRef.current);
+    }
+    loopRef.current = hookLoop(videoEl, canvasRef, onFrame, mirror, {
+      targetFps: renderMode === "safe" ? 24 : 30,
+    });
+  }, [T.grid, hookLoop, triggerAction, updateDraw, tickFps, stopDetectionLoop, renderMode]);
 
   const startVideo = useCallback(() => {
     if (!handLandmarkerRef.current || !modelReady) return;
@@ -380,7 +413,7 @@ export default function Voxis() {
 
   const stopVideo = useCallback(() => {
     if (loopRef.current) {
-      cancelAnimationFrame(loopRef.current.id);
+      stopDetectionLoop(loopRef.current);
       loopRef.current = null;
     }
     if (videoRef.current) {
@@ -391,8 +424,9 @@ export default function Voxis() {
     setGesture("none");
     setFps(0);
     handsRef.current = null;
+    gestureStateRef.current = { gesture: "none", trackedHands: 0, lastLoggedGesture: "none", lastLogAt: 0 };
     drawGrid();
-  }, [drawGrid]);
+  }, [drawGrid, stopDetectionLoop]);
 
   const startCam = useCallback(async () => {
     if (!handLandmarkerRef.current || !modelReady) return;
@@ -421,7 +455,7 @@ export default function Voxis() {
 
   const stopCam = useCallback(() => {
     if (loopRef.current) {
-      cancelAnimationFrame(loopRef.current.id);
+      stopDetectionLoop(loopRef.current);
       loopRef.current = null;
     }
     if (streamRef.current) {
@@ -436,17 +470,11 @@ export default function Voxis() {
     setGesture("none");
     setFps(0);
     handsRef.current = null;
+    gestureStateRef.current = { gesture: "none", trackedHands: 0, lastLoggedGesture: "none", lastLogAt: 0 };
     drawGrid();
-  }, [drawGrid]);
+  }, [drawGrid, stopDetectionLoop]);
 
   useEffect(() => () => stopAll(), [stopAll]);
-
-  useEffect(() => {
-    engineLoop.start(() => {
-      // Future engine systems update here without rewriting the render loop.
-    });
-    return () => engineLoop.stop();
-  }, []);
 
   return (
     <div style={{ background: T.bg, color: T.text, fontFamily: "'Courier New',monospace", minHeight: "100vh", padding: 0, margin: 0 }}>
