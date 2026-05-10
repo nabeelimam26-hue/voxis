@@ -4,37 +4,52 @@ class EngineLoop {
   constructor() {
     this.lastTime = performance.now();
     this.running = false;
+    this.rafId = null;
+    this.frameCount = 0;
+    this.fpsWindowStart = this.lastTime;
   }
 
   start(update) {
     if (this.running) return;
 
     this.running = true;
+    this.lastTime = performance.now();
+    this.fpsWindowStart = this.lastTime;
+    this.frameCount = 0;
 
     const loop = (time) => {
       if (!this.running) return;
 
       const delta = time - this.lastTime;
-
-      EngineState.performance.fps =
-      delta > 0
-    ? Math.round(1000 / delta)
-    : 0;
-
-      EngineState.performance.frameTime = delta;
-
       this.lastTime = time;
+      this.frameCount += 1;
+
+      EngineState.performance.updateFrameTime = delta;
+      EngineState.performance.frameTime = EngineState.performance.renderFrameTime || delta;
+
+      if (time - this.fpsWindowStart >= 1000) {
+        EngineState.performance.updateFps = this.frameCount;
+        if (!EngineState.performance.renderFps) {
+          EngineState.performance.fps = this.frameCount;
+        }
+        this.frameCount = 0;
+        this.fpsWindowStart = time;
+      }
 
       update(delta);
 
-      requestAnimationFrame(loop);
+      this.rafId = requestAnimationFrame(loop);
     };
 
-    requestAnimationFrame(loop);
+    this.rafId = requestAnimationFrame(loop);
   }
 
   stop() {
     this.running = false;
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
   }
 }
 

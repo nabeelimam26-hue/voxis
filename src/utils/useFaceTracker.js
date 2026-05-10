@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { HandLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import EngineState from "../engine/state/EngineState";
 
 /**
  * useFaceTracker - Custom hook for MediaPipe Hand Landmarker
@@ -65,29 +66,52 @@ export function useFaceTracker() {
   }, []);
 
   // ── Start detection loop for video/webcam (streams all detected hands) ────
-  const startDetectionLoop = useCallback((videoEl, canvasRef, onLandmarks, mirror = false) => {
-    const loopRef = { id: null };
+  const startDetectionLoop = useCallback((videoEl, canvasRef, onLandmarks, mirror = false, options = {}) => {
+    const targetFps = options.targetFps ?? 30;
+    const minFrameMs = 1000 / targetFps;
+    const loopRef = {
+      id: null,
+      stopped: false,
+      lastInferenceAt: 0,
+      inferenceFrames: 0,
+      fpsWindowStart: performance.now(),
+    };
 
-    const loop = () => {
-      if (!videoEl || videoEl.paused || videoEl.ended || !handLandmarkerRef.current) {
+    EngineState.performance.inferenceTargetFps = targetFps;
+
+    const loop = (rafTime) => {
+      if (loopRef.stopped || !videoEl || videoEl.paused || videoEl.ended || !handLandmarkerRef.current) {
         return;
       }
 
-      if (videoEl.readyState < 2) {
-        loopRef.id = requestAnimationFrame(loop);
+      loopRef.id = requestAnimationFrame(loop);
+
+      if (videoEl.readyState < 2 || rafTime - loopRef.lastInferenceAt < minFrameMs) {
         return;
       }
 
-      // Update canvas dimensions
+      loopRef.lastInferenceAt = rafTime;
+
+      // Update canvas dimensions only when the source dimensions change.
       const canvas = canvasRef.current;
       if (canvas) {
-        canvas.width = videoEl.videoWidth || 640;
-        canvas.height = videoEl.videoHeight || 480;
+        const width = videoEl.videoWidth || 640;
+        const height = videoEl.videoHeight || 480;
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
       }
 
       try {
-        const now = performance.now();
-        const result = handLandmarkerRef.current.detectForVideo(videoEl, now);
+        const inferenceStart = performance.now();
+        const result = handLandmarkerRef.current.detectForVideo(videoEl, inferenceStart);
+        EngineState.performance.inferenceFrameTime = performance.now() - inferenceStart;
+        loopRef.inferenceFrames += 1;
+
+        if (rafTime - loopRef.fpsWindowStart >= 1000) {
+          EngineState.performance.inferenceFps = loopRef.inferenceFrames;
+          loopRef.inferenceFrames = 0;
+          loopRef.fpsWindowStart = rafTime;
+        }
 
         // Process all detected hands with mirror if needed
         let handsData = null;
@@ -106,11 +130,9 @@ export function useFaceTracker() {
 
         // Call callback with all hands data and canvas
         onLandmarks(handsData, canvas);
-      } catch (e) {
+      } catch {
         // Skip frame silently
       }
-
-      loopRef.id = requestAnimationFrame(loop);
     };
 
     loopRef.id = requestAnimationFrame(loop);
@@ -119,10 +141,16 @@ export function useFaceTracker() {
 
   // ── Stop detection loop ────────────────────────────────────────────────────
   const stopDetectionLoop = useCallback((loopRef) => {
+    if (loopRef) {
+      loopRef.stopped = true;
+    }
     if (loopRef?.id) {
       cancelAnimationFrame(loopRef.id);
       loopRef.id = null;
     }
+    EngineState.performance.inferenceFps = 0;
+    EngineState.performance.inferenceFrameTime = 0;
+    EngineState.performance.inferenceTargetFps = 0;
   }, []);
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

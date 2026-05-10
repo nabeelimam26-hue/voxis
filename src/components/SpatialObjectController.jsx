@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import EngineState from "../engine/state/EngineState";
 const RENDER_PRESETS = {
   safe: {
     shadows: false,
@@ -38,12 +39,6 @@ const LS     = 0.10;   // lerp scale
 const CAM_Z  = 12;
 const D_MIN  = 0.15;
 const D_MAX  = 1.20;
-const isMobile =
-  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-
-
-
 function lmW(lm){ return { x:(lm.x-.5)*WORLD, y:-(lm.y-.5)*WORLD, z:lm.z*-DEPTH }; }
 function d3(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2); }
 function lerp3(v,t,a){ v.x=THREE.MathUtils.lerp(v.x,t.x,a);v.y=THREE.MathUtils.lerp(v.y,t.y,a);v.z=THREE.MathUtils.lerp(v.z,t.z,a); }
@@ -77,9 +72,11 @@ export default function SpatialObjectController({
   const hcRef   = useRef(0);
   const hdRef   = useRef(1);
   const uiTimer = useRef(0);
+  const renderStatsRef = useRef({ lastTime: 0, frames: 0, windowStart: 0 });
 
   const [status,    setStatus]    = useState("initializing…");
   const [handCount, setHandCount] = useState(0);
+  const [scaleDisplay, setScaleDisplay] = useState("1.00");
   const [modelInfo, setModelInfo] = useState("default TorusKnot");
   const [err,       setErr]       = useState(null);
 
@@ -135,10 +132,24 @@ if (CONFIG.pointLights >= 2) {
 
       stateRef.current={renderer,scene,camera,hero,markers,pL1,pL2,geo,mat};
 
-      // Animation loop
-      const animate=()=>{
+      // Animation loop: the only Three.js render path for this scene.
+      renderStatsRef.current = { lastTime: performance.now(), frames: 0, windowStart: performance.now() };
+      const animate=(rafTime)=>{
         rafRef.current=requestAnimationFrame(animate);
-        const now=performance.now();
+        const now=rafTime || performance.now();
+        const stats=renderStatsRef.current;
+        const frameDelta=now-stats.lastTime;
+        stats.lastTime=now;
+        stats.frames+=1;
+        EngineState.performance.renderFrameTime=frameDelta;
+        EngineState.performance.frameTime=frameDelta;
+        EngineState.performance.renderCallsThisFrame=0;
+        if(now-stats.windowStart>=1000){
+          EngineState.performance.renderFps=stats.frames;
+          EngineState.performance.fps=stats.frames;
+          stats.frames=0;
+          stats.windowStart=now;
+        }
         if(!stateRef.current)return;
         const {renderer,scene,camera,hero,markers,pL1,pL2}=stateRef.current;
         const hd=handsRef?.current;
@@ -198,18 +209,23 @@ if (pL2) {
           uiTimer.current=now;
           const c=hcRef.current;
           setHandCount(c);
+          setScaleDisplay(cScale.current.toFixed(2));
           setStatus(c===2?"✓ 2 hands — full control":c===1?"⚡ 1 hand":"waiting for hands…");
         }
 
+        const renderStart=performance.now();
+        EngineState.performance.renderCallsThisFrame+=1;
+        EngineState.performance.renderCount+=1;
         renderer.render(scene,camera);
+        EngineState.performance.renderWorkTime=performance.now()-renderStart;
       };
-      animate();
+      rafRef.current=requestAnimationFrame(animate);
 
       const onResize=()=>{ const W2=mount.clientWidth,H2=mount.clientHeight;camera.aspect=W2/H2;camera.updateProjectionMatrix();renderer.setSize(W2,H2); };
       window.addEventListener("resize",onResize);
-      return()=>{ cancelAnimationFrame(rafRef.current);window.removeEventListener("resize",onResize);renderer.dispose();geo.dispose();mat.dispose();if(mount.contains(renderer.domElement))mount.removeChild(renderer.domElement); };
+      return()=>{ cancelAnimationFrame(rafRef.current);window.removeEventListener("resize",onResize);renderer.dispose();geo.dispose();mat.dispose();EngineState.performance.renderFps=0;EngineState.performance.renderFrameTime=0;EngineState.performance.renderWorkTime=0;EngineState.performance.renderCallsThisFrame=0;if(mount.contains(renderer.domElement))mount.removeChild(renderer.domElement); };
     }catch(e){ console.error(e); setErr(e?.message||String(e)); }
-  },[]);
+  },[CONFIG, handsRef]);
 
   // ── Load uploaded model ────────────────────────────────────────────────────
   useEffect(()=>{
@@ -230,7 +246,7 @@ if (pL2) {
       setStatus(`⚠ unsupported: ${uploadedModelFile.name}`);
       URL.revokeObjectURL(url);
     }
-  },[uploadedModelFile]);
+  },[uploadedModelFile, renderMode]);
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
@@ -248,7 +264,7 @@ if (pL2) {
       {/* Status */}
       <div style={{position:"absolute",bottom:8,left:10,pointerEvents:"none",fontFamily:"monospace",fontSize:10,color:"#00ffcc",textShadow:"0 0 8px #00ffcc",zIndex:10}}>
         {status}
-        <div style={{fontSize:8,opacity:.45,marginTop:2}}>hands:{handCount} · scale:{cScale.current.toFixed(2)}x · {modelInfo}</div>
+        <div style={{fontSize:8,opacity:.45,marginTop:2}}>hands:{handCount} · scale:{scaleDisplay}x · {modelInfo}</div>
       </div>
       {/* Legend */}
       <div style={{position:"absolute",top:8,right:8,pointerEvents:"none",fontFamily:"monospace",fontSize:8,color:"#556",background:"rgba(0,0,0,0.45)",padding:"7px 11px",borderRadius:3,border:"1px solid rgba(0,255,204,0.08)",zIndex:10,lineHeight:1.7}}>
