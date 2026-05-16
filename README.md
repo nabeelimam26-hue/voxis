@@ -1,67 +1,82 @@
-# 🧊 VOXIS: Spatial Interaction Engine
-### ⚡ "Interaction over effects. Systems over gimmicks."
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=soft&color=auto&height=200&section=header&text=VOXIS%20ENGINE&fontSize=80&animation=fadeIn&fontColor=00f2ff" />
+</p>
 
+<p align="center">
+  <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=22&pause=1000&color=00F2FF&center=true&vCenter=true&width=500&lines=INITIATING+SPATIAL+INTERACTION...;VOXEL+MANIPULATION+ACTIVE;GESTURE+CONTROL+STABILIZED;CYBERPUNK+SYSTEMS+ENGAGED" />
+</p>
+
+---
+
+## ⚡ CORE SPECIFICATIONS
+<p align="center">
+  <img src="https://img.shields.io/badge/ARCHITECTURE-MODULAR-blueviolet?style=for-the-badge&logo=probot" />
+  <img src="https://img.shields.io/badge/ENGINE-THREE.JS-000000?style=for-the-badge&logo=three.js" />
+  <img src="https://img.shields.io/badge/UI-HOLOGRAPHIC-cyan?style=for-the-badge" />
+</p>
+
+### 🌌 The Spatial Manifest
+> "Interaction is the new interface."
+VOXIS is a high-performance interaction engine designed to bridge the gap between human movement and digital voxels. Built for the web, optimized for the future.
+
+---
+
+## 🛠️ TECHNICAL ARSENAL
 <p align="left">
-  <img src="https://img.shields.io/github/stars/nabeelimam26-hue/voxis?style=for-the-badge&color=0078D4&logo=github" />
-  <img src="https://img.shields.io/badge/Render-Three.js-blueviolet?style=for-the-badge&logo=three.js" />
-  <img src="https://img.shields.io/badge/Intelligence-MediaPipe-00a896?style=for-the-badge&logo=google" />
-  <img src="https://img.shields.io/badge/Vibe-Cyberpunk-cyan?style=for-the-badge" />
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=js,react,threejs,vite,tailwind,framer,git,vscode,figma&theme=dark" />
+  </a>
 </p>
 
+<details>
+<summary>📂 <b>VIEW ENGINE SUBSYSTEMS</b> (Click to Expand)</summary>
+
+### 🧠 Intelligence Layer
+- **MediaPipe Integration:** Real-time 21-point hand landmark tracking.
+- **Gesture Heuristics:** Custom logic for pinch-to-zoom and palm-rotation.
+
+### 🧊 Voxel Core
+- **Chunk Management:** Optimized memory allocation for large-scale 3D grids.
+- **Adaptive LOD:** Seamless detail transitions based on camera distance.
+
+### 🎨 Aesthetic Pipeline
+- **Glassmorphism UI:** Reactive components that respond to spatial light.
+- **Motion Engine:** Framer-motion driven transitions for zero-gravity feel.
+</details>
+
 ---
 
-## 🌌 The Vision
-VOXIS is a browser-native, realtime spatial interaction engine. It moves beyond traditional screen-based UI into a world of **gesture-controlled voxel manipulation** and **holographic immersion**. 
-
-Designed for high-performance spatial computing, VOXIS utilizes a modular engine loop to handle complex 3D interactions with zero lag.
-
----
-
-## 🛠️ Engine Architecture
+## 📊 SYSTEM METRICS
 <p align="center">
-  <img src="https://skillicons.dev/icons?i=js,react,threejs,vite,tailwind,framer,git,vscode&theme=dark" />
-</p>
-
-### 🔋 Core Modules
-* **Gesture Logic:** Dual-hand scaling, rotation, and smooth lerped movement.
-* **Rendering Pipeline:** Adaptive performance scaling via **SAFE** and **LUXURY** modes.
-* **Voxel Sandbox:** Dynamic chunk systems and terrain editing.
-* **Holographic UI:** Minimalist futuristic interface built for spatial awareness.
-
----
-
-## 🛰️ Real-Time Performance
-<p align="center">
-  <img width="48%" src="https://github-readme-stats-sigma-five.vercel.app/api/pin/?username=nabeelimam26-hue&repo=voxis&theme=tokyonight&show_owner=true" />
+  <img width="48%" src="https://github-readme-stats-sigma-five.vercel.app/api/pin/?username=nabeelimam26-hue&repo=voxis&theme=tokyonight&show_owner=true&hide_border=true" />
   <img width="48%" src="https://github-readme-stats-sigma-five.vercel.app/api/top-langs/?username=nabeelimam26-hue&layout=compact&theme=tokyonight&hide_border=true" />
 </p>
 
 ---
 
-## 🚀 Deployment & Demo
-| Environment | Link | Status |
-| :--- | :--- | :--- |
-| **Live Engine** | [**Launch VOXIS**](https://voxis-seven.vercel.app/) | ![Stable](https://img.shields.io/badge/-Stable-green) |
-| **Dev Docs** | [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md) | ![Active](https://img.shields.io/badge/-Active-blue) |
+## 🚀 DEPLOYMENT PROTOCOL
+
+| COMMAND | ACTION |
+| :--- | :--- |
+| `npm run dev` | **Initialize Dev-Environment** |
+| `npm run build` | **Execute Production Compilation** |
+| `npm run preview` | **Verify Engine Stability** |
 
 ---
 
-## 📸 Interface Preview
-> [!IMPORTANT]
-> **Showcase coming soon.** > *VOXIS is currently transitioning from a gesture-mirror experiment into a modular spatial platform.*
+## 🛰️ ACCESS PORTAL
+<p align="center">
+  <a href="https://voxis-seven.vercel.app/">
+    <img src="https://img.shields.io/badge/LAUNCH_LIVE_DEMO-00f2ff?style=for-the-badge&logo=vercel&logoColor=black" />
+  </a>
+</p>
 
 ---
 
-## 🛠️ Installation for Engineers
-```bash
-# Clone the engine
-git clone [https://github.com/nabeelimam26-hue/voxis.git](https://github.com/nabeelimam26-hue/voxis.git)
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=00f2ff&height=100&section=footer" width="100%" />
+</p>
 
-# Enter workspace
-cd voxis
-
-# Initialize dependencies
-npm install
-
-# Boot engine in dev mode
-npm run dev
+<p align="center">
+  <sub>VOXIS Engine // Developed by <a href="https://github.com/nabeelimam26-hue">nabeelimam26-hue</a></sub>
+</p>
