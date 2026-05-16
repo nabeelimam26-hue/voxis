@@ -1,133 +1,67 @@
-﻿# VOXIS
+# 🧊 VOXIS: Spatial Interaction Engine
+### ⚡ "Interaction over effects. Systems over gimmicks."
 
-<p align="center">
-  <img src="./public/branding/voxis-logo.png" width="140" />
+<p align="left">
+  <img src="https://img.shields.io/github/stars/nabeelimam26-hue/voxis?style=for-the-badge&color=0078D4&logo=github" />
+  <img src="https://img.shields.io/badge/Render-Three.js-blueviolet?style=for-the-badge&logo=three.js" />
+  <img src="https://img.shields.io/badge/Intelligence-MediaPipe-00a896?style=for-the-badge&logo=google" />
+  <img src="https://img.shields.io/badge/Vibe-Cyberpunk-cyan?style=for-the-badge" />
 </p>
 
+---
+
+## 🌌 The Vision
+VOXIS is a browser-native, realtime spatial interaction engine. It moves beyond traditional screen-based UI into a world of **gesture-controlled voxel manipulation** and **holographic immersion**. 
+
+Designed for high-performance spatial computing, VOXIS utilizes a modular engine loop to handle complex 3D interactions with zero lag.
+
+---
+
+## 🛠️ Engine Architecture
 <p align="center">
-  Cyberpunk Spatial Interaction Engine
+  <img src="https://skillicons.dev/icons?i=js,react,threejs,vite,tailwind,framer,git,vscode&theme=dark" />
+</p>
+
+### 🔋 Core Modules
+* **Gesture Logic:** Dual-hand scaling, rotation, and smooth lerped movement.
+* **Rendering Pipeline:** Adaptive performance scaling via **SAFE** and **LUXURY** modes.
+* **Voxel Sandbox:** Dynamic chunk systems and terrain editing.
+* **Holographic UI:** Minimalist futuristic interface built for spatial awareness.
+
+---
+
+## 🛰️ Real-Time Performance
+<p align="center">
+  <img width="48%" src="https://github-readme-stats-sigma-five.vercel.app/api/pin/?username=nabeelimam26-hue&repo=voxis&theme=tokyonight&show_owner=true" />
+  <img width="48%" src="https://github-readme-stats-sigma-five.vercel.app/api/top-langs/?username=nabeelimam26-hue&layout=compact&theme=tokyonight&hide_border=true" />
 </p>
 
 ---
 
-## Overview
-
-VOXIS is a realtime spatial interaction engine focused on:
-
-- voxel-based interaction
-- gesture-controlled manipulation
-- realtime 3D spatial systems
-- immersive holographic UI
-- adaptive rendering pipelines
-
-Originally started as a gesture/effect mirror experiment, the project evolved into a modular spatial interaction platform powered by:
-
-- React
-- Three.js
-- MediaPipe
-- Vite
+## 🚀 Deployment & Demo
+| Environment | Link | Status |
+| :--- | :--- | :--- |
+| **Live Engine** | [**Launch VOXIS**](https://voxis-seven.vercel.app/) | ![Stable](https://img.shields.io/badge/-Stable-green) |
+| **Dev Docs** | [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md) | ![Active](https://img.shields.io/badge/-Active-blue) |
 
 ---
 
-## Core Features
-
-### Spatial Interaction
-- gesture-based controls
-- dual-hand scaling
-- dual-hand rotation
-- smooth lerped movement
-- realtime spatial manipulation
-
-### Rendering
-- SAFE rendering mode
-- LUXURY rendering mode
-- adaptive performance scaling
-- cinematic lighting
-- mobile optimization
-
-### Architecture
-- modular engine systems
-- centralized engine loop
-- interaction state engine
-- reusable hooks/utilities
-- scalable rendering systems
-
-### Debugging Systems
-- debug overlay
-- centralized engine state
-- interaction state machine
-- render performance monitoring
+## 📸 Interface Preview
+> [!IMPORTANT]
+> **Showcase coming soon.** > *VOXIS is currently transitioning from a gesture-mirror experiment into a modular spatial platform.*
 
 ---
 
-## Project Structure
-
-```txt
-src/
-├── engine/
-├── components/
-├── hooks/
-├── utils/
-├── constants/
-└── debug/
-```
-
----
-
-## Current Direction
-
-VOXIS is transitioning toward:
-
-- voxel sandbox interaction
-- chunk systems
-- terrain editing
-- spatial manipulation tools
-- immersive voxel environments
-
-The project intentionally avoids:
-- effect spam
-- chaotic overlays
-- unnecessary gimmicks
-- visual clutter
-
-Focus remains on:
-- interaction quality
-- smoothness
-- architecture
-- scalability
-- immersive UX
-
----
-
-## Visual Identity
-
-VOXIS follows a:
-- cyberpunk aesthetic
-- holographic interface style
-- neon cyan/purple palette
-- minimalist futuristic design language
-
----
-
-## Engine Philosophy
-
-Interaction over effects.
-
-Systems over gimmicks.
-
-Smoothness over clutter.
-
----
-
-## Development
-
+## 🛠️ Installation for Engineers
 ```bash
+# Clone the engine
+git clone [https://github.com/nabeelimam26-hue/voxis.git](https://github.com/nabeelimam26-hue/voxis.git)
+
+# Enter workspace
+cd voxis
+
+# Initialize dependencies
 npm install
+
+# Boot engine in dev mode
 npm run dev
-```
-
----
-
-## Status
-
-Actively evolving into a browser-native spatial voxel interaction engine.
